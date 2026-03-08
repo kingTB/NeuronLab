@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>מעבדת למידה עמוקה | PhysiTal Standard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- Three.js for 3D rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <style>
+        :root {
+            --bg-glass: rgba(18, 18, 24, 0.85);
+            --border-glass: rgba(255, 255, 255, 0.1);
+            --accent: #38bdf8;
+            --text-main: #f8fafc;
+        }
+
+        body {
+            font-family: 'Rubik', sans-serif;
+            background-color: #050505;
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+        /* Full Screen Layers */
+        .layer-absolute { position: absolute; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; }
+        #canvas-1d, #main-heatmap { image-rendering: pixelated; width: 100%; height: 100%; }
+        #heatmap-points { pointer-events: none; width: 100%; height: 100%; }
+
+        /* Hidden Context Menu */
+        #context-menu {
+            position: absolute; background: rgba(15, 15, 20, 0.95);
+            backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-glass); border-radius: 8px;
+            padding: 4px 0; min-width: 180px; z-index: 1000;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8); display: none; flex-direction: column;
+        }
+        .menu-item { padding: 8px 16px; cursor: pointer; font-size: 0.9rem; color: #cbd5e1; text-align: right; transition: background 0.2s, color 0.2s; }
+        .menu-item:hover { background: rgba(56, 189, 248, 0.2); color: white; }
+        .menu-divider { height: 1px; background: rgba(255,255,255,0.1); margin: 4px 0; }
+
+        /* Draggable Glassmorphism Dialogues */
+        .dialogue {
+            position: absolute; background: var(--bg-glass);
+            backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+            border: 1px solid var(--border-glass); border-radius: 12px;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.5); z-index: 100;
+            display: none; flex-direction: column; pointer-events: auto;
+            min-width: 280px; max-height: 80vh;
+        }
+        .dialogue-header { padding: 12px 16px; border-bottom: 1px solid var(--border-glass); display: flex; justify-content: space-between; align-items: center; cursor: grab; font-weight: 600; font-size: 0.95rem; }
+        .dialogue-header:active { cursor: grabbing; }
+        .close-btn { cursor: pointer; opacity: 0.6; transition: opacity 0.2s; padding: 4px; margin: -4px; }
+        .close-btn:hover { opacity: 1; color: #f87171; }
+        .dialogue-content { padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; }
+
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; direction: ltr; }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 12px; width: 12px; border-radius: 50%;
+            background: #cbd5e1; cursor: pointer; margin-top: -4px; box-shadow: 0 0 10px rgba(0,0,0,0.5); transition: transform 0.15s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.3); background: #ffffff; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: #334155; border-radius: 2px; }
+
+        .btn { background: rgba(30, 41, 59, 0.8); border: 1px solid #475569; color: #cbd5e1; padding: 6px 12px; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 0.85rem; text-align: center; }
+        .btn:hover { background: #334155; color: white; }
+        .btn.active { background: #3b82f6; border-color: #60a5fa; color: white; box-shadow: 0 0 10px rgba(59, 130, 246, 0.3); }
+        .btn-danger { background: rgba(225, 29, 72, 0.2); border-color: #be123c; color: #fda4af; }
+        .btn-danger:hover { background: rgba(225, 29, 72, 0.4); color: white; }
+
+        /* Network SVG specific */
+        #network-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 5; pointer-events: none; }
+        .weight-interact { cursor: ns-resize; pointer-events: stroke; transition: stroke 0.1s; }
+        .weight-interact:hover { stroke: rgba(255,255,255,0.4) !important; }
+        
+        #nodes-container { position: absolute; inset: 0; z-index: 10; pointer-events: none; }
+        .node {
+            position: absolute; transform: translate(-50%, -50%); border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; z-index: 10;
+            background: #0f172a; border: 2px solid #64748b;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5); overflow: hidden; pointer-events: auto; cursor: ns-resize;
+            transition: border-color 0.2s, box-shadow 0.2s, transform 0.1s;
+        }
+        .node:hover { border-color: #fff; box-shadow: 0 0 15px rgba(255,255,255,0.3); transform: translate(-50%, -50%) scale(1.1); }
+        .node.inspected { border-color: #fef08a !important; box-shadow: 0 0 25px rgba(234, 179, 8, 0.6) !important; }
+        .node.input-node { width: 35px; height: 35px; font-weight: bold; font-family: 'JetBrains Mono'; font-size: 12px; border-color: #94a3b8; cursor: default; }
+        .node.input-node:hover { transform: translate(-50%, -50%); border-color: #94a3b8; box-shadow: none; }
+        .node.hidden-node { width: 45px; height: 45px; border-color: #8b5cf6;}
+        .node.output-node { width: 60px; height: 60px; border-color: #10b981; border-width: 3px;}
+        .mini-heatmap { width: 100%; height: 100%; object-fit: cover; opacity: 0.9; border-radius: 50%; pointer-events: none;}
+        
+        /* Tooltips */
+        #network-tooltip { position: fixed; background: rgba(0,0,0,0.85); border: 1px solid #475569; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-family: 'JetBrains Mono', monospace; pointer-events: none; z-index: 9999; transform: translate(-50%, -150%); white-space: pre-wrap; direction: ltr; display: none; }
+        #sim-tooltip { position: fixed; background: rgba(0,0,0,0.85); border: 1px solid #475569; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-family: 'JetBrains Mono', monospace; pointer-events: none; z-index: 9999; white-space: nowrap; direction: ltr; display: none; }
+
+        /* Graphs & Overlays */
+        #loss-graph { width: 100%; height: 120px; background: rgba(15,23,42,0.5); border-radius: 6px; border: 1px solid #334155; }
+        #viewer-title-badge {
+            position: absolute; top: 16px; left: 16px; background: rgba(15,23,42,0.8);
+            border: 1px solid #334155; padding: 6px 16px; border-radius: 20px;
+            font-size: 0.85rem; color: #e2e8f0; backdrop-filter: blur(8px); z-index: 50;
+            pointer-events: none; transition: all 0.3s;
+        }
+        .niqqud-enabled { font-family: 'Assistant', 'Rubik', sans-serif; }
+    </style>
+</head>
+<body id="app-body">
+
+    <!-- OVERLAY: View Title -->
+    <div id="viewer-title-badge">נוף ההחלטות (פלט סופי)</div>
+
+    <!-- Tooltips (Fixed outside layers to prevent clipping) -->
+    <div id="network-tooltip"></div>
+    <div id="sim-tooltip"></div>
+
+    <!-- LAYER 0: SIMULATION CANVAS -->
+    <div id="sim-layer" class="layer-absolute z-0">
+        <canvas id="canvas-1d" class="layer-absolute hidden bg-[#0f172a]"></canvas>
+        <div id="container-2d" class="layer-absolute hidden">
+            <canvas id="main-heatmap" class="layer-absolute"></canvas>
+            <canvas id="heatmap-points" class="layer-absolute z-10"></canvas>
+        </div>
+        <div id="container-3d" class="layer-absolute cursor-move hidden"></div>
+    </div>
+
+    <!-- LAYER 100: UI LAYER -->
+    <div id="ui-layer" class="layer-absolute z-[100] pointer-events-none">
+        
+        <!-- Context Menu -->
+        <div id="context-menu" class="pointer-events-auto">
+            <div class="menu-item" data-target="dlg-instructions">הוראות (Instructions)</div>
+            <div class="menu-divider"></div>
+            <div class="menu-item" data-target="dlg-controls">ארכיטקטורה ונתונים (Architecture & Data)</div>
+            <div class="menu-item" data-target="dlg-graphs">אימון וגרפים (Training & Graphs)</div>
+            <div class="menu-item" data-target="dlg-view">תצוגה (View - 3D)</div>
+            <div class="menu-item" data-target="dlg-network">רשת בזמן אמת (Network)</div>
+            <div class="menu-item" data-target="dlg-math">פונקציית נוירון (Math)</div>
+            <div class="menu-item" data-target="dlg-matrices">מטריצות רשת (Matrices)</div>
+            <div class="menu-divider"></div>
+            <div class="menu-item" data-target="dlg-settings">הגדרות (Settings)</div>
+            <div class="menu-divider"></div>
+            <div class="menu-item" data-target="dlg-docs">תיעוד (Documentation)</div>
+        </div>
+
+        <!-- Dialogue: Instructions -->
+        <div id="dlg-instructions" class="dialogue" style="top: 20px; right: 20px;">
+            <div class="dialogue-header"><span>הוראות</span><span class="close-btn" data-close="dlg-instructions">✕</span></div>
+            <div class="dialogue-content text-sm text-slate-300">
+                <p><strong class="text-white">מעבדת הלמידה העמוקה | PhysiTal</strong></p>
+                <ul class="list-disc pr-5 space-y-2 mt-2">
+                    <li><strong>קליק ימני:</strong> פותח את התפריט להצגת/הסתרת חלונות.</li>
+                    <li><strong>חקירת נוירונים:</strong> בתפריט "רשת בזמן אמת", <span class="text-yellow-300">לחץ קליק שמאלי</span> על כל נוירון (עיגול) כדי להציג את פונקציית ההחלטה האישית שלו על המסך הגדול! לחיצה נוספת תחזיר לפלט הסופי.</li>
+                    <li><strong>שינוי משקלים ידני:</strong> העבר את העכבר על קו מחבר או נוירון, <span class="text-sky-300">ולחץ וגרור למעלה/למטה</span> כדי לשנות את המשקל/ההטיה. הלמידה תושהה אוטומטית, ותוכל לראות את הערך המספרי משתנה בלייב.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Dialogue: Architecture & Data -->
+        <div id="dlg-controls" class="dialogue" style="top: 20px; left: 20px; width: 340px;">
+            <div class="dialogue-header"><span>ארכיטקטורה ונתונים</span><span class="close-btn" data-close="dlg-controls">✕</span></div>
+            <div class="dialogue-content">
+                
+                <div class="bg-slate-800/50 p-3 rounded-lg border border-slate-700 mb-2">
+                    <div class="text-xs font-bold text-slate-400 mb-1">מימד המרחב:</div>
+                    <div class="flex gap-1 mb-3"><button class="dim-btn btn flex-1" data-dim="1">1D</button><button class="dim-btn btn flex-1" data-dim="2">2D</button><button class="dim-btn btn flex-1 active" data-dim="3">3D</button></div>
+                    <div class="text-xs font-bold text-slate-400 mb-1">מערך נתונים:</div>
+                    <div id="dataset-buttons" class="grid grid-cols-3 gap-1 mb-3"></div>
+                    <div>
+                        <div class="flex justify-between text-xs mb-1"><span class="text-slate-400">רעש נתונים:</span></div>
+                        <input type="range" id="noise-slider" min="0" max="0.5" step="0.05" value="0.1">
+                    </div>
+                </div>
+
+                <div class="bg-slate-800/50 p-3 rounded-lg border border-slate-700">
+                    <div class="flex justify-between items-center mb-2"><span class="text-xs font-bold">שכבות נסתרות</span><div class="flex gap-1"><button id="btn-add-layer" class="btn px-2 py-1 text-xs">+</button><button id="btn-remove-layer" class="btn px-2 py-1 text-xs">-</button></div></div>
+                    <div id="layers-container" class="space-y-2 max-h-32 overflow-y-auto pr-1"></div>
+                    <div class="mt-3">
+                        <select id="hidden-act" class="w-full bg-slate-900 border border-slate-600 rounded p-1 text-xs text-white">
+                            <option value="relu">ReLU (מומלצת)</option>
+                            <option value="tanh">Tanh (חלקה)</option>
+                            <option value="sigmoid">Sigmoid</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dialogue: Training & Graphs -->
+        <div id="dlg-graphs" class="dialogue" style="top: 20px; left: 20px; width: 340px; display: flex;">
+            <div class="dialogue-header"><span>אימון וגרפים (Training)</span><span class="close-btn" data-close="dlg-graphs">✕</span></div>
+            <div class="dialogue-content p-3">
+                <div class="flex gap-2 mb-3">
+                    <button id="btn-play" class="btn active flex-1 font-bold">השהה (Pause)</button>
+                    <button id="btn-reset" class="btn btn-danger">אפס רשת</button>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2 text-center text-xs mb-3">
+                    <div class="bg-slate-800/50 p-2 rounded"><div class="text-slate-400 mb-1">איטרציה</div><div id="epoch-display" class="font-mono text-sky-300 text-sm">0</div></div>
+                    <div class="bg-slate-800/50 p-2 rounded"><div class="text-slate-400 mb-1">שגיאה (Loss)</div><div id="loss-display" class="font-mono text-rose-300 text-sm">0.000</div></div>
+                </div>
+
+                <div class="mb-4">
+                    <div class="flex justify-between text-xs mb-1"><span class="text-slate-400">קצב למידה (LR):</span><span id="lr-val" class="font-mono">0.05</span></div>
+                    <input type="range" id="lr-slider" min="-3" max="0" step="0.1" value="-1.3">
+                </div>
+
+                <div class="text-xs text-slate-400 mb-1">היסטוריית שגיאה (Cross Entropy)</div>
+                <canvas id="loss-graph"></canvas>
+            </div>
+        </div>
+
+        <!-- Dialogue: View (Now Dedicated to 3D Visual Tweaks) -->
+        <div id="dlg-view" class="dialogue" style="bottom: 20px; right: 20px;">
+            <div class="dialogue-header"><span>תצוגה (שליטת 3D)</span><span class="close-btn" data-close="dlg-view">✕</span></div>
+            <div class="dialogue-content">
+                <div class="text-xs text-slate-400 mb-4">שלוט במראה המרחב התלת-ממדי:</div>
+                
+                <div class="space-y-4">
+                    <div>
+                        <div class="flex justify-between text-xs mb-1"><span class="text-slate-300">תנודתיות (Wobble):</span><span id="val-wobble" class="font-mono text-slate-400">0.0</span></div>
+                        <input type="range" id="view-wobble" min="0" max="0.5" step="0.05" value="0">
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-xs mb-1"><span class="text-slate-300">צפיפות חלקיקים (Density):</span><span id="val-density" class="font-mono text-slate-400">2.0</span></div>
+                        <input type="range" id="view-density" min="0.5" max="5.0" step="0.1" value="2.0">
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-xs mb-1"><span class="text-slate-300">אטימות (Opacity Base):</span><span id="val-opacity" class="font-mono text-slate-400">0.85</span></div>
+                        <input type="range" id="view-opacity" min="0.1" max="1.0" step="0.05" value="0.85">
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-xs mb-1"><span class="text-slate-300">עובי משטח החלטה (Threshold):</span><span id="val-threshold" class="font-mono text-slate-400">0.35</span></div>
+                        <input type="range" id="view-threshold" min="0.1" max="0.8" step="0.05" value="0.35">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dialogue: Math Formula -->
+        <div id="dlg-math" class="dialogue" style="top: 20px; left: 380px; width: 420px;">
+            <div class="dialogue-header"><span id="math-title">פונקציית נוירון</span><span class="close-btn" data-close="dlg-math">✕</span></div>
+            <div class="dialogue-content p-3">
+                <div class="text-xs text-slate-400 mb-2">הפונקציה המפורשת כתלות במשתני הקלט:</div>
+                <div id="math-content" class="max-h-64 overflow-y-auto"></div>
+            </div>
+        </div>
+
+        <!-- Dialogue: Matrices -->
+        <div id="dlg-matrices" class="dialogue" style="bottom: 20px; right: 380px; width: 380px;">
+            <div class="dialogue-header"><span>מטריצות רשת (W, B)</span><span class="close-btn" data-close="dlg-matrices">✕</span></div>
+            <div class="dialogue-content p-3">
+                <div id="matrices-content" class="max-h-[60vh] overflow-y-auto pr-2"></div>
+            </div>
+        </div>
+
+        <!-- Dialogue: Network Inspector -->
+        <div id="dlg-network" class="dialogue" style="top: 20px; right: 20px; width: 400px; height: 320px; display: flex;">
+            <div class="dialogue-header"><span>מבט רנטגן לרשת</span><span class="close-btn" data-close="dlg-network">✕</span></div>
+            <div class="dialogue-content flex-1 relative p-0 overflow-hidden bg-slate-900/50" id="network-interactive-area">
+                <svg id="network-svg"></svg>
+                <div id="nodes-container"></div>
+                <div class="absolute bottom-2 right-2 bg-black/80 px-2 py-1 rounded text-[10px] pointer-events-none text-slate-300">
+                    <span class="text-yellow-300 font-bold">לחץ על נוירון</span> כדי להציג במסך הראשי.<br>
+                    <span class="text-sky-300 font-bold">גרור משקלים</span> כדי לשנות אותם ידנית.
+                </div>
+            </div>
+        </div>
+
+        <!-- Dialogue: Settings & Docs -->
+        <div id="dlg-settings" class="dialogue" style="top: 50%; left: 50%; transform: translate(-50%, -50%);">
+            <div class="dialogue-header"><span>הגדרות (Settings)</span><span class="close-btn" data-close="dlg-settings">✕</span></div>
+            <div class="dialogue-content text-sm"><div class="flex justify-between items-center"><span>ניקוד עברי (Niqqud)</span><button id="toggle-niqqud" class="btn">כבוי</button></div></div>
+        </div>
+        <div id="dlg-docs" class="dialogue" style="top: 50%; left: 50%; transform: translate(-50%, -50%); width: 350px;">
+            <div class="dialogue-header"><span>תיעוד (Documentation)</span><span class="close-btn" data-close="dlg-docs">✕</span></div>
+            <div class="dialogue-content text-sm text-slate-300 space-y-3"><p id="doc-attribution" class="font-bold text-white">נוצר על ידי פיזיטל עבור שוחרי פיזיקה ביקום ומסופק תחת רישיון שימוש חופשי.</p></div>
+        </div>
+
+    </div>
+
+    <script>
+        // ==========================================
+        // 1. PHYSI-TAL UI FRAMEWORK
+        // ==========================================
+        const UI = {
+            menu: document.getElementById('context-menu'),
+            dialogues: document.querySelectorAll('.dialogue'),
+            init() {
+                document.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    let x = e.clientX; let y = e.clientY;
+                    this.menu.style.display = 'flex';
+                    const rect = this.menu.getBoundingClientRect();
+                    if (x + rect.width > window.innerWidth) x -= rect.width;
+                    if (y + rect.height > window.innerHeight) y -= rect.height;
+                    this.menu.style.left = `${x}px`; this.menu.style.top = `${y}px`;
+                });
+
+                document.addEventListener('click', (e) => { if (!this.menu.contains(e.target)) this.menu.style.display = 'none'; });
+
+                document.querySelectorAll('.menu-item').forEach(item => {
+                    item.addEventListener('click', (e) => {
+                        const targetId = e.target.getAttribute('data-target');
+                        const dlg = document.getElementById(targetId);
+                        if(dlg) { dlg.style.display = dlg.style.display === 'flex' ? 'none' : 'flex'; this.bringToFront(dlg); }
+                        this.menu.style.display = 'none';
+                    });
+                });
+
+                document.querySelectorAll('.close-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => { document.getElementById(e.target.getAttribute('data-close')).style.display = 'none'; });
+                });
+
+                document.querySelectorAll('.dialogue').forEach(dlg => {
+                    const header = dlg.querySelector('.dialogue-header');
+                    dlg.addEventListener('mousedown', e => e.stopPropagation());
+                    dlg.addEventListener('wheel', e => e.stopPropagation());
+                    dlg.addEventListener('click', e => e.stopPropagation());
+
+                    header.addEventListener('mousedown', (e) => {
+                        this.bringToFront(dlg);
+                        const rect = dlg.getBoundingClientRect();
+                        dlg.style.right = 'auto'; dlg.style.bottom = 'auto'; dlg.style.transform = 'none';
+                        dlg.style.left = rect.left + 'px'; dlg.style.top = rect.top + 'px';
+                        let offsetX = e.clientX - rect.left; let offsetY = e.clientY - rect.top;
+
+                        const onMouseMove = (moveEvent) => { dlg.style.left = `${moveEvent.clientX - offsetX}px`; dlg.style.top = `${moveEvent.clientY - offsetY}px`; };
+                        const onMouseUp = () => { document.removeEventListener('mousemove', onMouseMove); document.removeEventListener('mouseup', onMouseUp); };
+                        document.addEventListener('mousemove', onMouseMove); document.addEventListener('mouseup', onMouseUp);
+                    });
+                });
+            },
+            bringToFront(el) { this.dialogues.forEach(d => d.style.zIndex = '100'); el.style.zIndex = '101'; }
+        };
+
+        // ==========================================
+        // 2. CORE NEURAL NETWORK MATH
+        // ==========================================
+        const MathUtils = {
+            relu: x => Math.max(0, x), reluDeriv: x => x > 0 ? 1 : 0,
+            sigmoid: x => 1 / (1 + Math.exp(-x)), sigmoidDeriv: x => { let s = 1/(1+Math.exp(-x)); return s * (1 - s); },
+            tanh: x => Math.tanh(x), tanhDeriv: x => { let t = Math.tanh(x); return 1 - t * t; },
+            randn: () => { let u=0,v=0; while(u===0) u=Math.random(); while(v===0) v=Math.random(); return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v); }
+        };
+
+        class DeepNeuralNetwork {
+            constructor(layerSizes, hiddenActName) {
+                this.layerSizes = layerSizes; this.numLayers = layerSizes.length - 1;
+                this.setActivation(hiddenActName);
+                this.outAct = MathUtils.sigmoid; this.outActDeriv = MathUtils.sigmoidDeriv;
+                this.initWeights();
+            }
+            setActivation(name) {
+                switch(name) {
+                    case 'relu': this.hAct = MathUtils.relu; this.hActDeriv = MathUtils.reluDeriv; break;
+                    case 'tanh': this.hAct = MathUtils.tanh; this.hActDeriv = MathUtils.tanhDeriv; break;
+                    case 'sigmoid': this.hAct = MathUtils.sigmoid; this.hActDeriv = MathUtils.sigmoidDeriv; break;
+                }
+            }
+            initWeights() {
+                this.W = []; this.B = [];
+                for(let l = 0; l < this.numLayers; l++) {
+                    let w_layer = []; let b_layer = [];
+                    let in_size = this.layerSizes[l]; let out_size = this.layerSizes[l+1];
+                    let initMult = (this.hAct === MathUtils.relu) ? Math.sqrt(2 / in_size) : Math.sqrt(1 / in_size);
+                    if (l === this.numLayers - 1) initMult = Math.sqrt(1 / in_size);
+                    for(let i = 0; i < out_size; i++) {
+                        let row = []; for(let j = 0; j < in_size; j++) row.push(MathUtils.randn() * initMult);
+                        w_layer.push(row); b_layer.push(0);
+                    }
+                    this.W.push(w_layer); this.B.push(b_layer);
+                }
+            }
+            forward(x) {
+                this.A = [x]; this.Z = [x]; let a_curr = x;
+                for(let l = 0; l < this.numLayers; l++) {
+                    let z_next = []; let a_next = [];
+                    let actFunc = (l === this.numLayers - 1) ? this.outAct : this.hAct;
+                    for(let i = 0; i < this.layerSizes[l+1]; i++) {
+                        let sum = this.B[l][i];
+                        for(let j = 0; j < this.layerSizes[l]; j++) sum += this.W[l][i][j] * a_curr[j];
+                        z_next.push(sum); a_next.push(actFunc(sum));
+                    }
+                    this.Z.push(z_next); this.A.push(a_next); a_curr = a_next;
+                }
+                return a_curr[0];
+            }
+            trainBatch(X, Y, lr) {
+                let m = X.length;
+                let dW_acc = this.W.map(layer => layer.map(row => row.map(() => 0)));
+                let dB_acc = this.B.map(layer => layer.map(() => 0));
+                let totalLoss = 0;
+
+                for (let i = 0; i < m; i++) {
+                    let out = this.forward(X[i]); let y = Y[i];
+                    let a_out = Math.max(1e-15, Math.min(1 - 1e-15, out));
+                    totalLoss -= (y * Math.log(a_out) + (1 - y) * Math.log(1 - a_out));
+
+                    let dZ_layers = []; dZ_layers[this.numLayers - 1] = [out - y];
+                    for (let l = this.numLayers - 2; l >= 0; l--) {
+                        let dZ_l = [];
+                        for (let j = 0; j < this.layerSizes[l+1]; j++) {
+                            let sum = 0;
+                            for (let k = 0; k < this.layerSizes[l+2]; k++) sum += this.W[l+1][k][j] * dZ_layers[l+1][k];
+                            dZ_l.push(sum * this.hActDeriv(this.Z[l+1][j]));
+                        }
+                        dZ_layers[l] = dZ_l;
+                    }
+                    for (let l = 0; l < this.numLayers; l++) {
+                        for (let j = 0; j < this.layerSizes[l+1]; j++) {
+                            dB_acc[l][j] += dZ_layers[l][j];
+                            for (let k = 0; k < this.layerSizes[l]; k++) dW_acc[l][j][k] += dZ_layers[l][j] * this.A[l][k];
+                        }
+                    }
+                }
+                for (let l = 0; l < this.numLayers; l++) {
+                    for (let j = 0; j < this.layerSizes[l+1]; j++) {
+                        this.B[l][j] -= lr * (dB_acc[l][j] / m);
+                        for (let k = 0; k < this.layerSizes[l]; k++) this.W[l][j][k] -= lr * (dW_acc[l][j][k] / m);
+                    }
+                }
+                return totalLoss / m;
+            }
+        }
+
+        // ==========================================
+        // 3. DATASETS & VISUAL ENGINES
+        // ==========================================
+        const Datasets = {
+            1: { clusters: (n) => { let d=[]; for(let i=0; i<150; i++) { let x=Math.random()*12-6; d.push({x:[x+MathUtils.randn()*n], y:(Math.abs(x)<2.5)?1:0}); } return d; }, sine: (n) => { let d=[]; for(let i=0; i<150; i++) { let x=Math.random()*12-6; d.push({x:[x+MathUtils.randn()*n], y:Math.sin(x*1.5)>0?1:0}); } return d; } },
+            2: { xor: (n) => { let d=[]; [[-2,-2,0],[2,2,0],[-2,2,1],[2,-2,1]].forEach(c=>{for(let i=0;i<60;i++)d.push({x:[c[0]+MathUtils.randn()*n*3,c[1]+MathUtils.randn()*n*3],y:c[2]});}); return d; }, circle: (n) => { let d=[]; for(let i=0; i<250; i++) { let r=Math.random()*4.5; let t=Math.random()*2*Math.PI; d.push({x:[r*Math.cos(t)+MathUtils.randn()*n*2,r*Math.sin(t)+MathUtils.randn()*n*2],y:r<2.5?1:0}); } return d; }, spiral: (n) => { let d=[]; for(let i=0; i<150; i++) { let r=i/150*5; let t=1.25*i/150*2*Math.PI; d.push({x:[r*Math.sin(t)+MathUtils.randn()*n,r*Math.cos(t)+MathUtils.randn()*n],y:1}); d.push({x:[-r*Math.sin(t)+MathUtils.randn()*n,-r*Math.cos(t)+MathUtils.randn()*n],y:0}); } return d; } },
+            3: { spheres: (n) => { let d=[]; for(let i=0; i<400; i++) { let u=Math.random(), v=Math.random(); let t=2*Math.PI*u, p=Math.acos(2*v-1), r=Math.random()*5; let x=r*Math.sin(p)*Math.cos(t), y=r*Math.sin(p)*Math.sin(t), z=r*Math.cos(p); d.push({x:[x+MathUtils.randn()*n, y+MathUtils.randn()*n, z+MathUtils.randn()*n], y:r<2.8?1:0}); } return d; }, xor3d: (n) => { let d=[]; [-2.5,2.5].forEach(x=>[-2.5,2.5].forEach(y=>[-2.5,2.5].forEach(z=>{ let l=(x>0^y>0^z>0)?1:0; for(let i=0;i<40;i++)d.push({x:[x+MathUtils.randn()*n*1.5,y+MathUtils.randn()*n*1.5,z+MathUtils.randn()*n*1.5],y:l}); }))); return d; } }
+        };
+        const DatasetNames = { 1: { clusters: 'אשכולות', sine: 'גלים' }, 2: { xor: 'XOR', circle: 'מעגל', spiral: 'ספירלה' }, 3: { spheres: 'כדור פנימי', xor3d: 'XOR 3D' } };
+
+        function getColor(v) {
+            v = Math.max(0, Math.min(1, v)); let r,g,b;
+            if (v<0.5) { let p=v*2; r=Math.floor(56*(1-p)+15*p); g=Math.floor(189*(1-p)+23*p); b=Math.floor(248*(1-p)+42*p); } 
+            else { let p=(v-0.5)*2; r=Math.floor(15*(1-p)+251*p); g=Math.floor(23*(1-p)+113*p); b=Math.floor(42*(1-p)+133*p); }
+            return [r,g,b,255]; 
+        }
+
+        const Engine1D = {
+            canvas: document.getElementById('canvas-1d'),
+            init() { this.ctx = this.canvas.getContext('2d'); },
+            render(nn, data) {
+                let w = window.innerWidth; let h = window.innerHeight;
+                if (w <= 0 || h <= 0) return;
+                this.canvas.width = w * window.devicePixelRatio; this.canvas.height = h * window.devicePixelRatio;
+                this.ctx.scale(window.devicePixelRatio, window.devicePixelRatio); this.ctx.clearRect(0,0,w,h);
+                this.ctx.strokeStyle='rgba(255,255,255,0.1)'; this.ctx.lineWidth=1; this.ctx.beginPath(); this.ctx.moveTo(0,h/2); this.ctx.lineTo(w,h/2); this.ctx.stroke();
+
+                this.ctx.beginPath(); this.ctx.lineWidth = 4;
+                for(let i=0; i<=w; i+=4) {
+                    let x = (i/w)*12 - 6; let pred = App.getNormalizedPrediction([x]); let y = h - (pred * h * 0.8 + h * 0.1);
+                    if(i===0) this.ctx.moveTo(i,y); else this.ctx.lineTo(i,y);
+                    this.ctx.strokeStyle = pred > 0.5 ? '#fb7185' : '#38bdf8'; this.ctx.stroke(); this.ctx.beginPath(); this.ctx.moveTo(i,y);
+                }
+                data.forEach(p => {
+                    let px = ((p.x[0]+6)/12)*w; let py = p.y===1 ? h*0.2 : h*0.8;
+                    this.ctx.beginPath(); this.ctx.arc(px,py,6,0,Math.PI*2);
+                    this.ctx.fillStyle = p.y===1?'#fb7185':'#38bdf8'; this.ctx.fill(); this.ctx.strokeStyle='white'; this.ctx.lineWidth=2; this.ctx.stroke();
+                });
+            }
+        };
+
+        const Engine2D = {
+            mainCanvas: document.getElementById('main-heatmap'), pointsCanvas: document.getElementById('heatmap-points'),
+            render(nn, data) {
+                let w = window.innerWidth; let h = window.innerHeight;
+                if (w <= 0 || h <= 0) return;
+                const resX = Math.max(1, Math.min(100, Math.floor(w / 10)));
+                const resY = Math.max(1, Math.min(100, Math.floor(h / 10)));
+                
+                this.mainCanvas.width = resX; this.mainCanvas.height = resY;
+                const ctx = this.mainCanvas.getContext('2d', {alpha: false});
+                const img = ctx.createImageData(resX, resY); let idx = 0;
+                for(let py=0; py<resY; py++) { for(let px=0; px<resX; px++) {
+                    let x = (px/resX)*12-6; let y = ((resY-1-py)/resY)*12-6; let color = getColor(App.getNormalizedPrediction([x,y]));
+                    img.data[idx++] = color[0]; img.data[idx++] = color[1]; img.data[idx++] = color[2]; img.data[idx++] = 255;
+                }}
+                ctx.putImageData(img, 0, 0);
+
+                this.pointsCanvas.width = w * window.devicePixelRatio; this.pointsCanvas.height = h * window.devicePixelRatio;
+                const pCtx = this.pointsCanvas.getContext('2d'); pCtx.scale(window.devicePixelRatio, window.devicePixelRatio); pCtx.clearRect(0,0,w,h);
+                data.forEach(p => {
+                    let cx = ((p.x[0]+6)/12)*w; let cy = (1-(p.x[1]+6)/12)*h;
+                    pCtx.beginPath(); pCtx.arc(cx,cy,5,0,Math.PI*2);
+                    pCtx.fillStyle = p.y===0?'#38bdf8':'#fb7185'; pCtx.fill(); pCtx.strokeStyle='rgba(255,255,255,0.8)'; pCtx.lineWidth=1.5; pCtx.stroke();
+                });
+            }
+        };
+
+        // --- VOLUMETRIC 3D ENGINE ---
+        const Engine3D = {
+            container: document.getElementById('container-3d'), initialized: false, time: 0,
+            
+            // Visual Parameters controlled by View dialogue
+            params: {
+                wobble: 0.0,      // No movement by default
+                densitySize: 2.0, // Base particle size
+                opacityBase: 0.85,// Base material opacity
+                threshold: 0.35   // Thickness of boundary (distance from 0.5)
+            },
+
+            init() {
+                if(this.initialized) return;
+                this.scene = new THREE.Scene();
+                this.scene.fog = new THREE.FogExp2(0x050505, 0.035);
+                
+                this.camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.1, 100); 
+                this.camera.position.set(12, 10, 15);
+                
+                this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); 
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.container.appendChild(this.renderer.domElement);
+                
+                this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement); 
+                this.controls.enableDamping = true; 
+                this.controls.autoRotate = true; 
+                this.controls.autoRotateSpeed = 0.5;
+
+                const tCanvas = document.createElement('canvas'); tCanvas.width = 64; tCanvas.height = 64;
+                const tCtx = tCanvas.getContext('2d'); 
+                const gradient = tCtx.createRadialGradient(32,32,0, 32,32,32);
+                gradient.addColorStop(0, 'rgba(255,255,255,1)'); 
+                gradient.addColorStop(0.3, 'rgba(255,255,255,0.8)'); 
+                gradient.addColorStop(1, 'rgba(255,255,255,0)');
+                tCtx.fillStyle = gradient; tCtx.fillRect(0,0,64,64); 
+                const tex = new THREE.CanvasTexture(tCanvas);
+
+                let geomD = new THREE.BufferGeometry(); 
+                let matD = new THREE.PointsMaterial({ 
+                    size: 1.5, vertexColors: true, map: tex, 
+                    transparent: true, opacity: 1.0, depthWrite: false 
+                });
+                this.dataPoints = new THREE.Points(geomD, matD); 
+                this.scene.add(this.dataPoints);
+
+                this.gridRes = 30;
+                let geomB = new THREE.BufferGeometry();
+                this.matB = new THREE.PointsMaterial({ 
+                    size: this.params.densitySize, 
+                    vertexColors: true, map: tex, transparent: true, 
+                    opacity: this.params.opacityBase, depthWrite: false, blending: THREE.AdditiveBlending 
+                });
+                this.fluidPoints = new THREE.Points(geomB, this.matB); 
+                this.scene.add(this.fluidPoints);
+
+                this.baseGrid = [];
+                for(let x=0; x<this.gridRes; x++) { 
+                    for(let y=0; y<this.gridRes; y++) { 
+                        for(let z=0; z<this.gridRes; z++) { 
+                            this.baseGrid.push([(x/this.gridRes)*12-6, (y/this.gridRes)*12-6, (z/this.gridRes)*12-6]); 
+                        } 
+                    } 
+                }
+                
+                const axesHelper = new THREE.AxesHelper( 6 ); 
+                this.scene.add( axesHelper );
+                
+                this.bindSliders();
+                this.initialized = true;
+
+                window.addEventListener('resize', () => { 
+                    if (window.innerWidth <= 0 || window.innerHeight <= 0) return;
+                    this.camera.aspect = window.innerWidth / window.innerHeight; 
+                    this.camera.updateProjectionMatrix(); 
+                    this.renderer.setSize(window.innerWidth, window.innerHeight); 
+                });
+            },
+
+            bindSliders() {
+                const sWobble = document.getElementById('view-wobble');
+                sWobble.addEventListener('input', e => { this.params.wobble = parseFloat(e.target.value); document.getElementById('val-wobble').innerText = this.params.wobble.toFixed(2); });
+                
+                const sDensity = document.getElementById('view-density');
+                sDensity.addEventListener('input', e => { this.params.densitySize = parseFloat(e.target.value); this.matB.size = this.params.densitySize; document.getElementById('val-density').innerText = this.params.densitySize.toFixed(1); });
+                
+                const sOpacity = document.getElementById('view-opacity');
+                sOpacity.addEventListener('input', e => { this.params.opacityBase = parseFloat(e.target.value); this.matB.opacity = this.params.opacityBase; document.getElementById('val-opacity').innerText = this.params.opacityBase.toFixed(2); });
+
+                const sThreshold = document.getElementById('view-threshold');
+                sThreshold.addEventListener('input', e => { this.params.threshold = parseFloat(e.target.value); document.getElementById('val-threshold').innerText = this.params.threshold.toFixed(2); });
+            },
+
+            updateData(data) {
+                let pos = [], col = [];
+                data.forEach(p => { 
+                    pos.push(p.x[0], p.x[1], p.x[2]); 
+                    if(p.y===1) col.push(1.0, 0.1, 0.3);
+                    else col.push(0.1, 0.8, 1.0);
+                });
+                this.dataPoints.geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); 
+                this.dataPoints.geometry.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+            },
+
+            render(nn) {
+                if(!this.initialized) this.init();
+                this.controls.update(); 
+                this.time += 0.04;
+
+                let bPos = [], bCol = [];
+                let p_wobble = this.params.wobble;
+                let p_thresh = this.params.threshold;
+
+                for(let i=0; i<this.baseGrid.length; i++) {
+                    let pt = this.baseGrid[i]; 
+                    let pred = App.getNormalizedPrediction(pt); 
+                    
+                    let wobbleX = pt[0]; let wobbleY = pt[1]; let wobbleZ = pt[2];
+                    if (p_wobble > 0) {
+                        wobbleX += Math.sin(this.time * 1.5 + pt[1]*0.5) * p_wobble;
+                        wobbleY += Math.cos(this.time * 1.2 + pt[2]*0.5) * p_wobble;
+                        wobbleZ += Math.sin(this.time * 1.8 + pt[0]*0.5) * p_wobble;
+                    }
+                    
+                    bPos.push(wobbleX, wobbleY, wobbleZ);
+                    
+                    // Alpha Logic based on dynamic threshold
+                    let distToBoundary = Math.abs(pred - 0.5) / 0.5; // Normalized 0 to 1
+                    let isBoundary = Math.abs(pred - 0.5) <= p_thresh;
+                    
+                    let alpha;
+                    if (isBoundary) {
+                        // Peak brightness inside threshold
+                        alpha = 0.02 + Math.pow(1.0 - (Math.abs(pred - 0.5)/p_thresh), 2) * 0.9;
+                    } else {
+                        // Fast falloff outside threshold
+                        alpha = 0.02; 
+                    }
+                    
+                    let r, g, b;
+                    if (pred < 0.5) {
+                        r = (1.0 - distToBoundary) * 0.6; g = 0.1 + (1.0 - distToBoundary) * 0.8; b = 0.4 + (1.0 - distToBoundary) * 0.6;
+                    } else {
+                        r = 0.4 + (1.0 - distToBoundary) * 0.6; g = (1.0 - distToBoundary) * 0.5; b = 0.1 + (1.0 - distToBoundary) * 0.2;
+                    }
+                    
+                    bCol.push(r * alpha, g * alpha, b * alpha);
+                }
+                
+                this.fluidPoints.geometry.setAttribute('position', new THREE.Float32BufferAttribute(bPos, 3));
+                this.fluidPoints.geometry.setAttribute('color', new THREE.Float32BufferAttribute(bCol, 3));
+                
+                this.renderer.render(this.scene, this.camera);
+            }
+        };
+
+        // ==========================================
+        // 4. MAIN APPLICATION
+        // ==========================================
+        const App = {
+            nn: null, data: [], hiddenLayers: [2], lossHistory: [],
+            epoch: 0, isPlaying: true, animFrame: null, inputDim: 2, currentDataset: 'xor',
+            activeDrag: null, inspectedNeuron: null,
+            
+            init() {
+                UI.init(); this.bindUI(); this.bindNetworkInteraction(); this.bindSimInteraction();
+                document.querySelectorAll('.dim-btn').forEach(b => b.classList.toggle('active', parseInt(b.dataset.dim) === this.inputDim));
+                this.switchDimension(this.inputDim);
+                this.loop();
+            },
+
+            bindUI() {
+                document.querySelectorAll('.dim-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        let dim = parseInt(e.target.dataset.dim);
+                        document.querySelectorAll('.dim-btn').forEach(b => b.classList.toggle('active', parseInt(b.dataset.dim) === dim));
+                        this.switchDimension(dim);
+                    });
+                });
+                document.getElementById('noise-slider').addEventListener('input', () => { this.generateData(); });
+                document.getElementById('hidden-act').addEventListener('change', () => this.resetNetwork());
+                document.getElementById('lr-slider').addEventListener('input', (e) => { document.getElementById('lr-val').textContent = Math.pow(10, parseFloat(e.target.value)).toFixed(4); });
+
+                document.getElementById('btn-play').addEventListener('click', () => { this.togglePlay(); });
+                document.getElementById('btn-reset').addEventListener('click', () => this.resetNetwork());
+
+                document.getElementById('btn-add-layer').addEventListener('click', () => { if (this.hiddenLayers.length < 5) { this.hiddenLayers.push(4); this.renderLayerUI(); this.resetNetwork(); } });
+                document.getElementById('btn-remove-layer').addEventListener('click', () => { if (this.hiddenLayers.length > 0) { this.hiddenLayers.pop(); this.renderLayerUI(); this.resetNetwork(); } });
+            },
+
+            togglePlay(forcePause = false) {
+                if (forcePause) this.isPlaying = false;
+                else this.isPlaying = !this.isPlaying;
+                document.getElementById('btn-play').innerText = this.isPlaying ? 'השהה (Pause)' : 'המשך למידה (Play)';
+                document.getElementById('btn-play').classList.toggle('active', this.isPlaying);
+            },
+
+            switchDimension(dim) {
+                this.inputDim = dim;
+                document.getElementById('canvas-1d').classList.toggle('hidden', dim !== 1);
+                document.getElementById('container-2d').classList.toggle('hidden', dim !== 2);
+                document.getElementById('container-3d').classList.toggle('hidden', dim !== 3);
+                if(dim === 3 && !Engine3D.initialized) Engine3D.init(); if(dim === 1) Engine1D.init();
+
+                const container = document.getElementById('dataset-buttons'); container.innerHTML = '';
+                const sets = DatasetNames[dim]; 
+                let found = false;
+                for(let key in sets) {
+                    let btn = document.createElement('button'); btn.className = `btn flex-1 py-1 text-xs ${this.currentDataset === key ? 'active' : ''}`;
+                    btn.dataset.key = key; btn.innerText = sets[key];
+                    if (this.currentDataset === key) found = true;
+                    btn.onclick = (e) => { container.querySelectorAll('button').forEach(b => b.classList.remove('active')); e.target.classList.add('active'); this.currentDataset = key; this.generateData(); this.resetNetwork(); };
+                    container.appendChild(btn); 
+                }
+                if (!found) {
+                    let firstKey = Object.keys(sets)[0];
+                    this.currentDataset = firstKey;
+                    container.querySelector(`[data-key="${firstKey}"]`).classList.add('active');
+                }
+                
+                this.updateViewerTitle();
+                this.generateData(); this.resetNetwork();
+            },
+
+            renderLayerUI() {
+                const c = document.getElementById('layers-container'); c.innerHTML = '';
+                if (this.hiddenLayers.length === 0) {
+                    c.innerHTML = `<div class="text-center text-xs text-slate-400 py-2">0 שכבות נסתרות (מודל פרספטרון לינארי)</div>`;
+                    return;
+                }
+                this.hiddenLayers.forEach((neurons, i) => {
+                    c.innerHTML += `<div class="flex justify-between items-center bg-slate-900 p-2 rounded mb-1">
+                        <span class="text-xs text-slate-300">שכבה ${i + 1}</span>
+                        <div class="flex items-center gap-2"><button class="bg-slate-700 w-5 h-5 rounded text-white hover:bg-slate-600" onclick="App.changeNeurons(${i}, -1)">-</button><span class="text-xs font-mono w-4 text-center">${neurons}</span><button class="bg-slate-700 w-5 h-5 rounded text-white hover:bg-slate-600" onclick="App.changeNeurons(${i}, 1)">+</button></div>
+                    </div>`;
+                });
+            },
+
+            changeNeurons(layerIndex, delta) { let next = this.hiddenLayers[layerIndex] + delta; if (next >= 1 && next <= 8) { this.hiddenLayers[layerIndex] = next; this.renderLayerUI(); this.resetNetwork(); } },
+            generateData() { let noise = parseFloat(document.getElementById('noise-slider').value); this.data = Datasets[this.inputDim][this.currentDataset](noise); this.X = this.data.map(d => d.x); this.Y = this.data.map(d => d.y); if(this.inputDim === 3 && Engine3D.initialized) Engine3D.updateData(this.data); },
+
+            resetNetwork() {
+                let hiddenAct = document.getElementById('hidden-act').value;
+                this.nn = new DeepNeuralNetwork([this.inputDim, ...this.hiddenLayers, 1], hiddenAct);
+                this.epoch = 0; this.lossHistory = []; this.inspectedNeuron = null;
+                document.getElementById('epoch-display').textContent = '0';
+                this.updateViewerTitle();
+                this.buildNetworkUI(); this.renderVisualizers();
+            },
+
+            getNormalizedPrediction(pt) {
+                this.nn.forward(pt);
+                if (!this.inspectedNeuron) return this.nn.A[this.nn.numLayers][0]; 
+                
+                let a = this.nn.A[this.inspectedNeuron.l][this.inspectedNeuron.i];
+                if (this.inspectedNeuron.l < this.nn.numLayers) { 
+                    if (this.nn.hAct === MathUtils.relu) return Math.min(1, Math.max(0, a/4));
+                    if (this.nn.hAct === MathUtils.tanh) return (a+1)/2;
+                    return a; // Sigmoid is already between 0 and 1
+                }
+                return a; 
+            },
+
+            loop() {
+                requestAnimationFrame(() => this.loop());
+                
+                if (this.isPlaying && this.X && this.Y && !this.activeDrag) {
+                    let lr = Math.pow(10, parseFloat(document.getElementById('lr-slider').value)); let loss;
+                    for(let i=0; i<5; i++) { loss = this.nn.trainBatch(this.X, this.Y, lr); this.epoch++; }
+                    
+                    if (this.epoch % 5 === 0) {
+                        document.getElementById('epoch-display').textContent = this.epoch.toLocaleString();
+                        document.getElementById('loss-display').textContent = loss.toFixed(4);
+                        this.lossHistory.push(loss);
+                        // ביטלנו את המגבלה כדי להציג את כל היסטוריית הלמידה מראשיתה
+                        this.drawLossGraph();
+                    }
+                }
+                this.renderVisualizers();
+            },
+
+            renderVisualizers() {
+                if (this.inputDim === 1) Engine1D.render(this.nn, this.data);
+                else if (this.inputDim === 2) Engine2D.render(this.nn, this.data);
+                else if (this.inputDim === 3) Engine3D.render(this.nn);
+                
+                if (document.getElementById('dlg-network').style.display === 'flex') {
+                    this.drawNetworkSVG();
+                    if(this.hiddenLayers.length > 0) this.updateMiniHeatmaps();
+                }
+
+                if (!this.isPlaying || this.epoch % 5 === 0) {
+                    this.updateMathDialogue();
+                    this.updateMatricesDialogue();
+                }
+            },
+
+            drawLossGraph() {
+                const canvas = document.getElementById('loss-graph');
+                if(!canvas) return; 
+                
+                const w = canvas.clientWidth; const h = canvas.clientHeight;
+                if (w <= 0 || h <= 0) return;
+
+                if(canvas.width !== w) canvas.width = w;
+                if(canvas.height !== h) canvas.height = h;
+
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0,0,w,h);
+                if(this.lossHistory.length < 2) return;
+                
+                let maxLoss = Math.max(...this.lossHistory, 0.1);
+                ctx.beginPath(); ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2;
+                this.lossHistory.forEach((l, i) => {
+                    let x = (i / (this.lossHistory.length - 1)) * w; let y = h - (l / maxLoss) * (h * 0.8) - (h * 0.1);
+                    if(i===0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                });
+                ctx.stroke();
+            },
+
+            updateMathDialogue() {
+                const dlg = document.getElementById('dlg-math');
+                if (dlg.style.display !== 'flex') return;
+                
+                let targetL = this.nn.numLayers; let targetI = 0;
+                if (this.inspectedNeuron) { targetL = this.inspectedNeuron.l; targetI = this.inspectedNeuron.i; }
+                
+                let title = targetL === this.nn.numLayers ? 'פונקציית הפלט (Output)' : `נוירון נסתר (שכבה ${targetL}, אינדקס ${targetI})`;
+                document.getElementById('math-title').innerText = title;
+                
+                let formula = this.getNeuronFormula(targetL, targetI);
+                document.getElementById('math-content').innerHTML = `<div class="font-mono text-[11px] leading-relaxed break-all text-sky-200 bg-slate-900/80 p-3 rounded border border-slate-700 shadow-inner" style="direction: ltr; text-align: left;">${formula}</div>`;
+            },
+
+            getNeuronFormula(l, i) {
+                if (l === 0) return `<span class="text-white font-bold">${['X', 'Y', 'Z'][i]}</span>`;
+                
+                let actName = (l === this.nn.numLayers) ? '\u03C3' : (this.nn.hAct === MathUtils.relu ? 'ReLU' : (this.nn.hAct === MathUtils.tanh ? 'Tanh' : 'Sig'));
+                let weights = this.nn.W[l-1][i]; let bias = this.nn.B[l-1][i];
+                
+                let terms = [];
+                for (let j = 0; j < weights.length; j++) {
+                    let w = weights[j];
+                    if (Math.abs(w) < 0.005) continue; 
+                    let wStr = w >= 0 ? w.toFixed(2) : `(${w.toFixed(2)})`;
+                    let prevTerm = this.getNeuronFormula(l-1, j);
+                    terms.push(`${wStr}*${prevTerm}`);
+                }
+                
+                let biasStr = bias >= 0 ? `+ ${bias.toFixed(2)}` : `- ${Math.abs(bias).toFixed(2)}`;
+                let termsStr = terms.length > 0 ? terms.join(' + ') : '0';
+                return `<span class="text-rose-400 font-bold">${actName}</span>( ${termsStr} <span class="text-yellow-300">${biasStr}</span> )`;
+            },
+
+            updateMatricesDialogue() {
+                const dlg = document.getElementById('dlg-matrices');
+                if (dlg.style.display !== 'flex') return;
+
+                let html = '';
+                for (let l = 0; l < this.nn.numLayers; l++) {
+                    let W = this.nn.W[l]; let B = this.nn.B[l];
+                    html += `<div class="mb-4 bg-slate-900/60 p-3 rounded border border-slate-700" style="direction: ltr;">
+                        <div class="text-[11px] font-bold text-slate-300 mb-2 border-b border-slate-600 pb-1 text-right">מעבר לשכבה ${l+1}</div>
+                        <div class="flex flex-col gap-3 overflow-x-auto">
+                            <div class="flex gap-2 items-start">
+                                <span class="text-xs font-mono text-sky-400 font-bold mt-1">W=</span>
+                                <table class="text-[11px] font-mono border-collapse bg-slate-800/50 rounded">`;
+                    
+                    for (let i = 0; i < W.length; i++) {
+                        html += `<tr><td class="border-l border-r border-slate-500 px-1 text-slate-500">|</td>`;
+                        for (let j = 0; j < W[i].length; j++) {
+                            let val = W[i][j]; let color = val >= 0 ? 'text-emerald-400' : 'text-rose-400';
+                            html += `<td class="px-2 py-0.5 text-center ${color}">${val.toFixed(2)}</td>`;
+                        }
+                        html += `<td class="border-l border-r border-slate-500 px-1 text-slate-500">|</td></tr>`;
+                    }
+                    
+                    html += `   </table>
+                            </div>
+                            <div class="flex gap-2 items-center">
+                                <span class="text-xs font-mono text-yellow-400 font-bold">B=</span>
+                                <table class="text-[11px] font-mono border-collapse bg-slate-800/50 rounded">
+                                    <tr><td class="border-l border-r border-slate-500 px-1 text-slate-500">|</td>`;
+                    for (let i = 0; i < B.length; i++) {
+                        let val = B[i]; let color = val >= 0 ? 'text-emerald-400' : 'text-rose-400';
+                        html += `<td class="px-2 py-0.5 text-center ${color}">${val.toFixed(2)}</td>`;
+                    }
+                    html += `       <td class="border-l border-r border-slate-500 px-1 text-slate-500">|</td></tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>`;
+                }
+                document.getElementById('matrices-content').innerHTML = html;
+            },
+
+            bindSimInteraction() {
+                const cont2d = document.getElementById('container-2d');
+                const simTooltip = document.getElementById('sim-tooltip');
+                
+                cont2d.addEventListener('mousemove', (e) => {
+                    if (this.inputDim !== 2 || this.activeDrag) return;
+                    
+                    const rect = cont2d.getBoundingClientRect();
+                    let px = e.clientX - rect.left;
+                    let py = e.clientY - rect.top;
+                    
+                    let vx = (px / rect.width) * 12 - 6;
+                    let vy = (1 - py / rect.height) * 12 - 6;
+                    let pred = this.getNormalizedPrediction([vx, vy]);
+                    
+                    simTooltip.style.display = 'block';
+                    simTooltip.style.left = (e.clientX + 15) + 'px';
+                    simTooltip.style.top = (e.clientY + 15) + 'px';
+                    simTooltip.innerHTML = `Val: <span class="${pred > 0.5 ? 'text-rose-400' : 'text-sky-400'}">${pred.toFixed(4)}</span><br><span class="text-slate-400 text-[10px]">X: ${vx.toFixed(2)}, Y: ${vy.toFixed(2)}</span>`;
+                });
+                
+                cont2d.addEventListener('mouseleave', () => {
+                    simTooltip.style.display = 'none';
+                });
+            },
+
+            bindNetworkInteraction() {
+                const container = document.getElementById('network-interactive-area');
+                const tooltip = document.getElementById('network-tooltip');
+                let isDraggingNode = false;
+
+                container.addEventListener('mousedown', (e) => {
+                    let isLine = e.target.classList.contains('weight-interact');
+                    let node = e.target.closest('.hidden-node, .output-node');
+                    isDraggingNode = false;
+                    
+                    if (isLine) {
+                        this.togglePlay(true);
+                        let l = parseInt(e.target.dataset.l); let j = parseInt(e.target.dataset.j); let i = parseInt(e.target.dataset.i);
+                        this.activeDrag = { type: 'weight', l, j, i, startY: e.clientY, startVal: this.nn.W[l][j][i], hasMoved: false };
+                        
+                        tooltip.style.display = 'block';
+                        tooltip.style.left = e.clientX + 'px';
+                        tooltip.style.top = e.clientY + 'px';
+                        tooltip.innerText = `Weight: ${this.activeDrag.startVal.toFixed(3)}`;
+                        
+                        e.preventDefault(); e.stopPropagation();
+                    } else if (node) {
+                        this.togglePlay(true);
+                        let l = parseInt(node.dataset.l); let i = parseInt(node.dataset.i);
+                        this.activeDrag = { type: 'bias', l, i, startY: e.clientY, startVal: this.nn.B[l-1][i], hasMoved: false };
+                        
+                        tooltip.style.display = 'block';
+                        tooltip.style.left = e.clientX + 'px';
+                        tooltip.style.top = e.clientY + 'px';
+                        tooltip.innerText = `Bias: ${this.activeDrag.startVal.toFixed(3)}`;
+                        
+                        e.preventDefault(); e.stopPropagation();
+                    }
+                });
+
+                document.addEventListener('mousemove', (e) => {
+                    let target = e.target;
+                    let isLine = target.classList && target.classList.contains('weight-interact');
+                    let node = target.closest ? target.closest('.hidden-node, .output-node') : null;
+                    
+                    if (this.activeDrag) {
+                        if (Math.abs(this.activeDrag.startY - e.clientY) > 3) {
+                            this.activeDrag.hasMoved = true;
+                            isDraggingNode = true;
+                        }
+                    }
+
+                    if (this.activeDrag || (isLine && container.contains(target)) || (node && container.contains(node))) {
+                        tooltip.style.display = 'block'; 
+                        let valStr = "";
+                        
+                        if (this.activeDrag) {
+                            tooltip.style.left = e.clientX + 'px';
+                            tooltip.style.top = e.clientY + 'px';
+                            let currentVal = this.activeDrag.startVal;
+                            
+                            if (this.activeDrag.hasMoved) {
+                                let delta = (this.activeDrag.startY - e.clientY) * 0.05;
+                                currentVal = this.activeDrag.startVal + delta;
+                                
+                                if (this.activeDrag.type === 'weight') {
+                                    this.nn.W[this.activeDrag.l][this.activeDrag.j][this.activeDrag.i] = currentVal;
+                                } else {
+                                    this.nn.B[this.activeDrag.l-1][this.activeDrag.i] = currentVal;
+                                }
+                                this.renderVisualizers();
+                            }
+                            
+                            if (this.activeDrag.type === 'weight') {
+                                valStr = `Weight: ${currentVal.toFixed(3)}`;
+                            } else {
+                                valStr = `Bias: ${currentVal.toFixed(3)}`;
+                            }
+                            
+                        } else if (isLine) {
+                            tooltip.style.left = e.clientX + 'px';
+                            tooltip.style.top = e.clientY + 'px';
+                            valStr = `Weight: ${this.nn.W[target.dataset.l][target.dataset.j][target.dataset.i].toFixed(3)}`;
+                        } else if (node) {
+                            tooltip.style.left = e.clientX + 'px';
+                            tooltip.style.top = e.clientY + 'px';
+                            valStr = `Bias: ${this.nn.B[node.dataset.l-1][node.dataset.i].toFixed(3)}\nClick to Focus`;
+                        }
+                        tooltip.innerText = valStr;
+                    } else { tooltip.style.display = 'none'; }
+                });
+
+                document.addEventListener('mouseup', () => { 
+                    if (this.activeDrag && this.activeDrag.type === 'bias' && !this.activeDrag.hasMoved) {
+                        if (this.inspectedNeuron && this.inspectedNeuron.l === this.activeDrag.l && this.inspectedNeuron.i === this.activeDrag.i) {
+                            this.inspectedNeuron = null;
+                        } else {
+                            this.inspectedNeuron = { l: this.activeDrag.l, i: this.activeDrag.i };
+                        }
+                        this.updateViewerTitle();
+                        this.updateNodeStyles();
+                        this.updateMathDialogue();
+                    }
+                    this.activeDrag = null; tooltip.style.display = 'none'; 
+                });
+            },
+
+            updateViewerTitle() {
+                let base = this.inputDim === 1 ? 'פונקציית החלטה (1D)' : (this.inputDim === 2 ? 'מפת החלטות (2D)' : 'משטח החלטה בחלל (3D)');
+                let ext = " - פלט סופי";
+                if (this.inspectedNeuron) {
+                    if (this.inspectedNeuron.l === this.nn.numLayers) ext = " - פלט סופי";
+                    else ext = ` - זכוכית מגדלת: שכבה ${this.inspectedNeuron.l}, נוירון ${this.inspectedNeuron.i + 1}`;
+                }
+                document.getElementById('viewer-title-badge').innerText = base + ext;
+            },
+
+            updateNodeStyles() {
+                document.querySelectorAll('.node').forEach(n => n.classList.remove('inspected'));
+                if (this.inspectedNeuron) {
+                    let target = document.querySelector(`.node[data-l="${this.inspectedNeuron.l}"][data-i="${this.inspectedNeuron.i}"]`);
+                    if (target) target.classList.add('inspected');
+                } else {
+                    let target = document.querySelector(`.output-node`);
+                    if (target) target.classList.add('inspected');
+                }
+            },
+
+            buildNetworkUI() {
+                const nc = document.getElementById('nodes-container'); nc.innerHTML = '';
+                this.domNodes = [];
+                for (let l = 0; l < this.nn.layerSizes.length; l++) {
+                    let layerNodes = [];
+                    for (let i = 0; i < this.nn.layerSizes[l]; i++) {
+                        let div = document.createElement('div'); let nodeObj = { div, canvas: null };
+                        if (l === 0) {
+                            div.className = 'node input-node text-slate-300';
+                            div.innerHTML = this.inputDim === 1 ? 'X' : (i===0 ? 'X' : (i===1 ? 'Y' : 'Z'));
+                        } else {
+                            div.className = `node ${l === this.nn.numLayers ? 'output-node' : 'hidden-node'}`;
+                            div.dataset.l = l; div.dataset.i = i; 
+                            let canvas = document.createElement('canvas'); canvas.className = 'mini-heatmap';
+                            canvas.width = 25; canvas.height = 25;
+                            div.appendChild(canvas); nodeObj.canvas = canvas;
+                        }
+                        nc.appendChild(div); layerNodes.push(nodeObj);
+                    }
+                    this.domNodes.push(layerNodes);
+                }
+                this.updateNodeStyles();
+            },
+            
+            drawNetworkSVG() {
+                const nc = document.getElementById('nodes-container');
+                const w = nc.clientWidth; const h = nc.clientHeight;
+                if (w === 0) return;
+
+                let layerSpacingX = w / (this.domNodes.length + 0.5); let startX = layerSpacingX * 0.75;
+
+                this.domNodes.forEach((layer, l) => {
+                    let pX = startX + l * layerSpacingX; let numN = layer.length;
+                    let spaceY = Math.min(50, h / (numN + 1)); let startY = (h - (numN - 1) * spaceY) / 2;
+                    layer.forEach((node, i) => {
+                        node.div.style.left = `${pX}px`; node.div.style.top = `${startY + i * spaceY}px`;
+                        node.x = pX; node.y = startY + i * spaceY;
+                    });
+                });
+
+                let svgHtml = '';
+                for (let l = 0; l < this.nn.numLayers; l++) {
+                    let cLayer = this.domNodes[l]; let nLayer = this.domNodes[l+1];
+                    let wMat = this.nn.W[l];
+                    for (let j = 0; j < nLayer.length; j++) {
+                        for (let i = 0; i < cLayer.length; i++) {
+                            let weight = wMat[j][i];
+                            let strokeW = Math.max(0.5, Math.min(5, Math.abs(weight) * 2));
+                            let color = weight > 0 ? `rgba(34, 211, 238, ${Math.min(0.9, weight)})` : `rgba(244, 114, 182, ${Math.min(0.9, Math.abs(weight))})`;
+                            svgHtml += `<line class="weight-interact" data-l="${l}" data-j="${j}" data-i="${i}" x1="${cLayer[i].x}" y1="${cLayer[i].y}" x2="${nLayer[j].x}" y2="${nLayer[j].y}" stroke="transparent" stroke-width="15"></line>`;
+                            svgHtml += `<line x1="${cLayer[i].x}" y1="${cLayer[i].y}" x2="${nLayer[j].x}" y2="${nLayer[j].y}" stroke="${color}" stroke-width="${strokeW}" pointer-events="none"></line>`;
+                        }
+                    }
+                }
+                document.getElementById('network-svg').innerHTML = svgHtml;
+            },
+
+            updateMiniHeatmaps() {
+                const res = 25;
+                for (let l = 1; l < this.domNodes.length; l++) {
+                    for (let i = 0; i < this.domNodes[l].length; i++) {
+                        let ctx = this.domNodes[l][i].canvas.getContext('2d');
+                        
+                        // Adaptive display based on Input Dimension
+                        if (this.inputDim === 1) {
+                            ctx.fillStyle = '#0f172a'; ctx.fillRect(0,0,res,res);
+                            ctx.beginPath(); ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2;
+                            for (let px = 0; px < res; px++) {
+                                let vx = (px/res)*12 - 6;
+                                this.nn.forward([vx]); let a = this.nn.A[l][i];
+                                
+                                let norm_a = a;
+                                if (l < this.nn.numLayers) {
+                                    if (this.nn.hAct === MathUtils.relu) norm_a = Math.min(1, Math.max(0, a/4));
+                                    else if (this.nn.hAct === MathUtils.tanh) norm_a = (a+1)/2;
+                                    // Sigmoid keeps norm_a = a
+                                }
+                                
+                                let py = res - (norm_a * res);
+                                if (px === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+                            }
+                            ctx.stroke();
+                        } else {
+                            let img = ctx.createImageData(res, res); let idx = 0;
+                            for (let py = 0; py < res; py++) {
+                                for (let px = 0; px < res; px++) {
+                                    let vx = (px/res)*12 - 6; let vy = ((res-1-py)/res)*12 - 6;
+                                    let inp = [vx, vy]; if(this.inputDim > 2) inp.push(0);
+                                    this.nn.forward(inp); let a = this.nn.A[l][i];
+                                    
+                                    let norm_a = a;
+                                    if (l < this.nn.numLayers) {
+                                        if (this.nn.hAct === MathUtils.relu) norm_a = Math.min(1, Math.max(0, a/4));
+                                        else if (this.nn.hAct === MathUtils.tanh) norm_a = (a+1)/2;
+                                        // Sigmoid keeps norm_a = a
+                                    }
+                                    
+                                    let rgba = getColor(norm_a);
+                                    img.data[idx++] = rgba[0]; img.data[idx++] = rgba[1]; img.data[idx++] = rgba[2]; img.data[idx++] = 255;
+                                }
+                            }
+                            ctx.putImageData(img, 0, 0);
+                        }
+                    }
+                }
+            }
+        };
+
+        window.onload = () => App.init();
+    </script>
+</body>
+</html>
