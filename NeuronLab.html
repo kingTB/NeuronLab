@@ -30,6 +30,10 @@
             overflow: hidden;
             user-select: none;
         }
+        
+        /* Cursor overriding when adding custom points */
+        body.add-point-mode { cursor: crosshair !important; }
+        body.delete-point-mode { cursor: crosshair !important; }
 
         .font-mono { font-family: 'JetBrains Mono', monospace; }
 
@@ -57,7 +61,7 @@
             border: 1px solid var(--border-glass); border-radius: 12px;
             box-shadow: 0 15px 40px rgba(0,0,0,0.5); z-index: 100;
             display: none; flex-direction: column; pointer-events: auto;
-            min-width: 280px; max-height: 80vh;
+            min-width: 280px; max-height: 85vh;
         }
         .dialogue-header { padding: 12px 16px; border-bottom: 1px solid var(--border-glass); display: flex; justify-content: space-between; align-items: center; cursor: grab; font-weight: 600; font-size: 0.95rem; }
         .dialogue-header:active { cursor: grabbing; }
@@ -145,8 +149,9 @@
         <div id="context-menu" class="pointer-events-auto">
             <div class="menu-item" data-target="dlg-instructions">הוראות (Instructions)</div>
             <div class="menu-divider"></div>
-            <div class="menu-item" data-target="dlg-controls">ארכיטקטורה ונתונים (Architecture & Data)</div>
-            <div class="menu-item" data-target="dlg-graphs">אימון וגרפים (Training & Graphs)</div>
+            <div class="menu-item" data-target="dlg-controls">ארכיטקטורה (Architecture)</div>
+            <div class="menu-item" data-target="dlg-data">ניהול נתונים (Data)</div>
+            <div class="menu-item" data-target="dlg-graphs">אימון וגרפים (Training)</div>
             <div class="menu-item" data-target="dlg-view">תצוגה (View - 3D)</div>
             <div class="menu-item" data-target="dlg-network">רשת בזמן אמת (Network)</div>
             <div class="menu-item" data-target="dlg-math">פונקציית נוירון (Math)</div>
@@ -165,27 +170,16 @@
                 <ul class="list-disc pr-5 space-y-2 mt-2">
                     <li><strong>קליק ימני:</strong> פותח את התפריט להצגת/הסתרת חלונות.</li>
                     <li><strong>חקירת נוירונים:</strong> בתפריט "רשת בזמן אמת", <span class="text-yellow-300">לחץ קליק שמאלי</span> על כל נוירון (עיגול) כדי להציג את פונקציית ההחלטה האישית שלו על המסך הגדול! לחיצה נוספת תחזיר לפלט הסופי.</li>
-                    <li><strong>שינוי משקלים ידני:</strong> העבר את העכבר על קו מחבר או נוירון, <span class="text-sky-300">ולחץ וגרור למעלה/למטה</span> כדי לשנות את המשקל/ההטיה. הלמידה תושהה אוטומטית, ותוכל לראות את הערך המספרי משתנה בלייב.</li>
+                    <li><strong>שינוי משקלים ידני:</strong> העבר את העכבר על קו מחבר או נוירון, <span class="text-sky-300">ולחץ וגרור למעלה/למטה</span> כדי לשנות את המשקל/ההטיה. הלמידה תושהה אוטומטית.</li>
+                    <li><strong>הוספת נתונים:</strong> בתפריט הנתונים תוכלו לעבור למצב "הוספת נקודות" וללחוץ ישירות על הגרפים כדי להוסיף דגימות ולראות איך הרשת מגיבה!</li>
                 </ul>
             </div>
         </div>
 
         <!-- Dialogue: Architecture & Data -->
         <div id="dlg-controls" class="dialogue" style="top: 20px; left: 20px; width: 340px;">
-            <div class="dialogue-header"><span>ארכיטקטורה ונתונים</span><span class="close-btn" data-close="dlg-controls">✕</span></div>
+            <div class="dialogue-header"><span>ארכיטקטורה</span><span class="close-btn" data-close="dlg-controls">✕</span></div>
             <div class="dialogue-content">
-                
-                <div class="bg-slate-800/50 p-3 rounded-lg border border-slate-700 mb-2">
-                    <div class="text-xs font-bold text-slate-400 mb-1">מימד המרחב:</div>
-                    <div class="flex gap-1 mb-3"><button class="dim-btn btn flex-1" data-dim="1">1D</button><button class="dim-btn btn flex-1" data-dim="2">2D</button><button class="dim-btn btn flex-1 active" data-dim="3">3D</button></div>
-                    <div class="text-xs font-bold text-slate-400 mb-1">מערך נתונים:</div>
-                    <div id="dataset-buttons" class="grid grid-cols-3 gap-1 mb-3"></div>
-                    <div>
-                        <div class="flex justify-between text-xs mb-1"><span class="text-slate-400">רעש נתונים:</span></div>
-                        <input type="range" id="noise-slider" min="0" max="0.5" step="0.05" value="0.1">
-                    </div>
-                </div>
-
                 <div class="bg-slate-800/50 p-3 rounded-lg border border-slate-700">
                     <div class="flex justify-between items-center mb-2"><span class="text-xs font-bold">שכבות נסתרות</span><div class="flex gap-1"><button id="btn-add-layer" class="btn px-2 py-1 text-xs">+</button><button id="btn-remove-layer" class="btn px-2 py-1 text-xs">-</button></div></div>
                     <div id="layers-container" class="space-y-2 max-h-32 overflow-y-auto pr-1"></div>
@@ -200,8 +194,53 @@
             </div>
         </div>
 
+        <!-- NEW Dialogue: Data Management -->
+        <div id="dlg-data" class="dialogue" style="top: 20px; left: 380px; width: 340px; display: flex;">
+            <div class="dialogue-header"><span>ניהול נתונים</span><span class="close-btn" data-close="dlg-data">✕</span></div>
+            <div class="dialogue-content">
+                
+                <div class="bg-slate-800/50 p-3 rounded-lg border border-slate-700 mb-2">
+                    <div class="text-xs font-bold text-slate-400 mb-1">מימד המרחב:</div>
+                    <div class="flex gap-1 mb-3"><button class="dim-btn btn flex-1" data-dim="1">1D</button><button class="dim-btn btn flex-1" data-dim="2">2D</button><button class="dim-btn btn flex-1 active" data-dim="3">3D</button></div>
+                    <div class="text-xs font-bold text-slate-400 mb-1">מערך נתונים מוכן:</div>
+                    <div id="dataset-buttons" class="grid grid-cols-3 gap-1 mb-3"></div>
+                    <div class="mb-2">
+                        <div class="flex justify-between text-xs mb-1"><span class="text-slate-400">רעש נתונים:</span></div>
+                        <input type="range" id="noise-slider" min="0" max="0.5" step="0.05" value="0.1">
+                    </div>
+                </div>
+
+                <div class="bg-slate-800/50 p-3 rounded-lg border border-slate-700">
+                    <div class="text-[11px] font-bold text-slate-300 mb-2">עריכה ידנית על המסך:</div>
+                    <div class="flex gap-1 mb-2">
+                        <button id="btn-add-class0" class="btn flex-1 !bg-sky-900/50 !text-sky-300 border-sky-700/50 hover:!bg-sky-800">הוסף כחול (0)</button>
+                        <button id="btn-add-class1" class="btn flex-1 !bg-rose-900/50 !text-rose-300 border-rose-700/50 hover:!bg-rose-800">הוסף אדום (1)</button>
+                    </div>
+                    <div class="flex gap-1 mb-2">
+                        <button id="btn-delete-point" class="btn flex-1 !bg-yellow-900/50 !text-yellow-300 border-yellow-700/50 hover:!bg-yellow-800">מחק נקודה</button>
+                        <button id="btn-clear-all" class="btn flex-1 !bg-red-900/50 !text-red-300 border-red-700/50 hover:!bg-red-800">נקה הכל</button>
+                    </div>
+                    
+                    <div class="mt-2 mb-2 border-t border-slate-600/50 pt-2">
+                        <div class="flex justify-between text-[10px] mb-1"><span class="text-slate-400">קצב לחיצה רציפה (נק'/שנייה):</span><span id="val-draw-rate" class="font-mono text-slate-300">10</span></div>
+                        <input type="range" id="draw-rate-slider" min="1" max="60" step="1" value="10">
+                    </div>
+                    
+                    <button id="btn-restore-dataset" class="btn w-full text-[10px] py-1 mt-1 bg-slate-700">בטל שינויים והחזר נתונים מקוריים</button>
+                </div>
+
+                <div class="bg-slate-800/50 p-3 rounded-lg border border-slate-700">
+                    <div class="text-[11px] font-bold text-slate-300 mb-1">טעינת קובץ CSV:</div>
+                    <div class="text-[9px] text-slate-500 mb-2">פורמט לשורה ב-2D: <span class="font-mono">x1, x2, label</span> (תווית 0 או 1)</div>
+                    <input type="file" id="file-csv" accept=".csv" class="text-[10px] text-slate-300 w-full">
+                    <div id="csv-status" class="text-[10px] mt-1 text-sky-300 font-bold hidden">הקובץ נטען בהצלחה!</div>
+                </div>
+
+            </div>
+        </div>
+
         <!-- Dialogue: Training & Graphs -->
-        <div id="dlg-graphs" class="dialogue" style="top: 20px; left: 20px; width: 340px; display: flex;">
+        <div id="dlg-graphs" class="dialogue" style="top: 20px; left: 380px; width: 340px; display: flex;">
             <div class="dialogue-header"><span>אימון וגרפים (Training)</span><span class="close-btn" data-close="dlg-graphs">✕</span></div>
             <div class="dialogue-content p-3">
                 <div class="flex gap-2 mb-3">
@@ -252,7 +291,7 @@
         </div>
 
         <!-- Dialogue: Math Formula -->
-        <div id="dlg-math" class="dialogue" style="top: 20px; left: 380px; width: 420px;">
+        <div id="dlg-math" class="dialogue" style="top: 20px; right: 440px; width: 420px;">
             <div class="dialogue-header"><span id="math-title">פונקציית נוירון</span><span class="close-btn" data-close="dlg-math">✕</span></div>
             <div class="dialogue-content p-3">
                 <div class="text-xs text-slate-400 mb-2">הפונקציה המפורשת כתלות במשתני הקלט:</div>
@@ -302,6 +341,7 @@
             dialogues: document.querySelectorAll('.dialogue'),
             init() {
                 document.addEventListener('contextmenu', (e) => {
+                    if (document.body.classList.contains('add-point-mode') || document.body.classList.contains('delete-point-mode')) return;
                     e.preventDefault();
                     let x = e.clientX; let y = e.clientY;
                     this.menu.style.display = 'flex';
@@ -442,11 +482,30 @@
         // 3. DATASETS & VISUAL ENGINES
         // ==========================================
         const Datasets = {
-            1: { clusters: (n) => { let d=[]; for(let i=0; i<150; i++) { let x=Math.random()*12-6; d.push({x:[x+MathUtils.randn()*n], y:(Math.abs(x)<2.5)?1:0}); } return d; }, sine: (n) => { let d=[]; for(let i=0; i<150; i++) { let x=Math.random()*12-6; d.push({x:[x+MathUtils.randn()*n], y:Math.sin(x*1.5)>0?1:0}); } return d; } },
-            2: { xor: (n) => { let d=[]; [[-2,-2,0],[2,2,0],[-2,2,1],[2,-2,1]].forEach(c=>{for(let i=0;i<60;i++)d.push({x:[c[0]+MathUtils.randn()*n*3,c[1]+MathUtils.randn()*n*3],y:c[2]});}); return d; }, circle: (n) => { let d=[]; for(let i=0; i<250; i++) { let r=Math.random()*4.5; let t=Math.random()*2*Math.PI; d.push({x:[r*Math.cos(t)+MathUtils.randn()*n*2,r*Math.sin(t)+MathUtils.randn()*n*2],y:r<2.5?1:0}); } return d; }, spiral: (n) => { let d=[]; for(let i=0; i<150; i++) { let r=i/150*5; let t=1.25*i/150*2*Math.PI; d.push({x:[r*Math.sin(t)+MathUtils.randn()*n,r*Math.cos(t)+MathUtils.randn()*n],y:1}); d.push({x:[-r*Math.sin(t)+MathUtils.randn()*n,-r*Math.cos(t)+MathUtils.randn()*n],y:0}); } return d; } },
-            3: { spheres: (n) => { let d=[]; for(let i=0; i<400; i++) { let u=Math.random(), v=Math.random(); let t=2*Math.PI*u, p=Math.acos(2*v-1), r=Math.random()*5; let x=r*Math.sin(p)*Math.cos(t), y=r*Math.sin(p)*Math.sin(t), z=r*Math.cos(p); d.push({x:[x+MathUtils.randn()*n, y+MathUtils.randn()*n, z+MathUtils.randn()*n], y:r<2.8?1:0}); } return d; }, xor3d: (n) => { let d=[]; [-2.5,2.5].forEach(x=>[-2.5,2.5].forEach(y=>[-2.5,2.5].forEach(z=>{ let l=(x>0^y>0^z>0)?1:0; for(let i=0;i<40;i++)d.push({x:[x+MathUtils.randn()*n*1.5,y+MathUtils.randn()*n*1.5,z+MathUtils.randn()*n*1.5],y:l}); }))); return d; } }
+            1: { 
+                clusters: (n) => { let d=[]; for(let i=0; i<150; i++) { let x=Math.random()*12-6; d.push({x:[x+MathUtils.randn()*n], y:(Math.abs(x)<2.5)?1:0}); } return d; }, 
+                sine: (n) => { let d=[]; for(let i=0; i<150; i++) { let x=Math.random()*12-6; d.push({x:[x+MathUtils.randn()*n], y:Math.sin(x*1.5)>0?1:0}); } return d; },
+                alternating: (n) => { let d=[]; for(let i=0; i<150; i++) { let x=Math.random()*12-6; d.push({x:[x+MathUtils.randn()*n], y:Math.floor((x+6)/3)%2===0?1:0}); } return d; }
+            },
+            2: { 
+                xor: (n) => { let d=[]; [[-2,-2,0],[2,2,0],[-2,2,1],[2,-2,1]].forEach(c=>{for(let i=0;i<60;i++)d.push({x:[c[0]+MathUtils.randn()*n*3,c[1]+MathUtils.randn()*n*3],y:c[2]});}); return d; }, 
+                circle: (n) => { let d=[]; for(let i=0; i<250; i++) { let r=Math.random()*4.5; let t=Math.random()*2*Math.PI; d.push({x:[r*Math.cos(t)+MathUtils.randn()*n*2,r*Math.sin(t)+MathUtils.randn()*n*2],y:r<2.5?1:0}); } return d; }, 
+                spiral: (n) => { let d=[]; for(let i=0; i<150; i++) { let r=i/150*5; let t=1.25*i/150*2*Math.PI; d.push({x:[r*Math.sin(t)+MathUtils.randn()*n,r*Math.cos(t)+MathUtils.randn()*n],y:1}); d.push({x:[-r*Math.sin(t)+MathUtils.randn()*n,-r*Math.cos(t)+MathUtils.randn()*n],y:0}); } return d; },
+                checkerboard: (n) => { let d=[]; for(let i=0; i<250; i++) { let x=Math.random()*12-6, y=Math.random()*12-6; d.push({x:[x+MathUtils.randn()*n, y+MathUtils.randn()*n], y:(Math.floor((x+6)/3)+Math.floor((y+6)/3))%2===0?1:0}); } return d; },
+                moons: (n) => { let d=[]; for(let i=0; i<150; i++) { let t=Math.random()*Math.PI; d.push({x:[2*Math.cos(t)+MathUtils.randn()*n-1, 2*Math.sin(t)+MathUtils.randn()*n+1],y:1}); d.push({x:[2*Math.cos(t)+MathUtils.randn()*n+1, -2*Math.sin(t)+MathUtils.randn()*n-1],y:0}); } return d; },
+                bullseye: (n) => { let d=[]; for(let i=0; i<250; i++) { let r=Math.random()*5.5, t=Math.random()*2*Math.PI; d.push({x:[r*Math.cos(t)+MathUtils.randn()*n, r*Math.sin(t)+MathUtils.randn()*n], y:(r<1.5 || (r>3 && r<4.5))?1:0}); } return d; }
+            },
+            3: { 
+                spheres: (n) => { let d=[]; for(let i=0; i<400; i++) { let u=Math.random(), v=Math.random(); let t=2*Math.PI*u, p=Math.acos(2*v-1), r=Math.random()*5; let x=r*Math.sin(p)*Math.cos(t), y=r*Math.sin(p)*Math.sin(t), z=r*Math.cos(p); d.push({x:[x+MathUtils.randn()*n, y+MathUtils.randn()*n, z+MathUtils.randn()*n], y:r<2.8?1:0}); } return d; }, 
+                xor3d: (n) => { let d=[]; [-2.5,2.5].forEach(x=>[-2.5,2.5].forEach(y=>[-2.5,2.5].forEach(z=>{ let l=(x>0^y>0^z>0)?1:0; for(let i=0;i<40;i++)d.push({x:[x+MathUtils.randn()*n*1.5,y+MathUtils.randn()*n*1.5,z+MathUtils.randn()*n*1.5],y:l}); }))); return d; },
+                planes: (n) => { let d=[]; for(let i=0; i<300; i++) { let x=Math.random()*10-5, y=Math.random()*10-5, z=Math.random()*10-5; d.push({x:[x+MathUtils.randn()*n, y+MathUtils.randn()*n, z+MathUtils.randn()*n], y:Math.abs(x+y+z)<2.5?1:0}); } return d; }
+            }
         };
-        const DatasetNames = { 1: { clusters: 'אשכולות', sine: 'גלים' }, 2: { xor: 'XOR', circle: 'מעגל', spiral: 'ספירלה' }, 3: { spheres: 'כדור פנימי', xor3d: 'XOR 3D' } };
+        const DatasetNames = { 
+            1: { clusters: 'אשכולות', sine: 'גלים', alternating: 'מקטעים' }, 
+            2: { xor: 'XOR', circle: 'מעגל', spiral: 'ספירלה', checkerboard: 'שחמט', moons: 'ירחים', bullseye: 'מטרה' }, 
+            3: { spheres: 'כדור פנימי', xor3d: 'XOR 3D', planes: 'מישורים' } 
+        };
 
         function getColor(v) {
             v = Math.max(0, Math.min(1, v)); let r,g,b;
@@ -465,14 +524,22 @@
                 this.ctx.scale(window.devicePixelRatio, window.devicePixelRatio); this.ctx.clearRect(0,0,w,h);
                 this.ctx.strokeStyle='rgba(255,255,255,0.1)'; this.ctx.lineWidth=1; this.ctx.beginPath(); this.ctx.moveTo(0,h/2); this.ctx.lineTo(w,h/2); this.ctx.stroke();
 
+                const padY = h * 0.15;
+                const rangeY = h * 0.7;
+
                 this.ctx.beginPath(); this.ctx.lineWidth = 4;
                 for(let i=0; i<=w; i+=4) {
-                    let x = (i/w)*12 - 6; let pred = App.getNormalizedPrediction([x]); let y = h - (pred * h * 0.8 + h * 0.1);
+                    let x = (i/w)*12 - 6; 
+                    let pred = App.getNormalizedPrediction([x]); 
+                    let y = h - padY - (pred * rangeY); 
+                    
                     if(i===0) this.ctx.moveTo(i,y); else this.ctx.lineTo(i,y);
                     this.ctx.strokeStyle = pred > 0.5 ? '#fb7185' : '#38bdf8'; this.ctx.stroke(); this.ctx.beginPath(); this.ctx.moveTo(i,y);
                 }
+                
                 data.forEach(p => {
-                    let px = ((p.x[0]+6)/12)*w; let py = p.y===1 ? h*0.2 : h*0.8;
+                    let px = ((p.x[0]+6)/12)*w; 
+                    let py = h - padY - (p.y * rangeY); 
                     this.ctx.beginPath(); this.ctx.arc(px,py,6,0,Math.PI*2);
                     this.ctx.fillStyle = p.y===1?'#fb7185':'#38bdf8'; this.ctx.fill(); this.ctx.strokeStyle='white'; this.ctx.lineWidth=2; this.ctx.stroke();
                 });
@@ -510,13 +577,7 @@
         const Engine3D = {
             container: document.getElementById('container-3d'), initialized: false, time: 0,
             
-            // Visual Parameters controlled by View dialogue
-            params: {
-                wobble: 0.0,      // No movement by default
-                densitySize: 2.0, // Base particle size
-                opacityBase: 0.85,// Base material opacity
-                threshold: 0.35   // Thickness of boundary (distance from 0.5)
-            },
+            params: { wobble: 0.0, densitySize: 2.0, opacityBase: 0.85, threshold: 0.35 },
 
             init() {
                 if(this.initialized) return;
@@ -531,48 +592,28 @@
                 this.container.appendChild(this.renderer.domElement);
                 
                 this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement); 
-                this.controls.enableDamping = true; 
-                this.controls.autoRotate = true; 
-                this.controls.autoRotateSpeed = 0.5;
+                this.controls.enableDamping = true; this.controls.autoRotate = true; this.controls.autoRotateSpeed = 0.5;
 
                 const tCanvas = document.createElement('canvas'); tCanvas.width = 64; tCanvas.height = 64;
                 const tCtx = tCanvas.getContext('2d'); 
                 const gradient = tCtx.createRadialGradient(32,32,0, 32,32,32);
-                gradient.addColorStop(0, 'rgba(255,255,255,1)'); 
-                gradient.addColorStop(0.3, 'rgba(255,255,255,0.8)'); 
-                gradient.addColorStop(1, 'rgba(255,255,255,0)');
+                gradient.addColorStop(0, 'rgba(255,255,255,1)'); gradient.addColorStop(0.3, 'rgba(255,255,255,0.8)'); gradient.addColorStop(1, 'rgba(255,255,255,0)');
                 tCtx.fillStyle = gradient; tCtx.fillRect(0,0,64,64); 
                 const tex = new THREE.CanvasTexture(tCanvas);
 
                 let geomD = new THREE.BufferGeometry(); 
-                let matD = new THREE.PointsMaterial({ 
-                    size: 1.5, vertexColors: true, map: tex, 
-                    transparent: true, opacity: 1.0, depthWrite: false 
-                });
-                this.dataPoints = new THREE.Points(geomD, matD); 
-                this.scene.add(this.dataPoints);
+                let matD = new THREE.PointsMaterial({ size: 1.5, vertexColors: true, map: tex, transparent: true, opacity: 1.0, depthWrite: false });
+                this.dataPoints = new THREE.Points(geomD, matD); this.scene.add(this.dataPoints);
 
                 this.gridRes = 30;
                 let geomB = new THREE.BufferGeometry();
-                this.matB = new THREE.PointsMaterial({ 
-                    size: this.params.densitySize, 
-                    vertexColors: true, map: tex, transparent: true, 
-                    opacity: this.params.opacityBase, depthWrite: false, blending: THREE.AdditiveBlending 
-                });
-                this.fluidPoints = new THREE.Points(geomB, this.matB); 
-                this.scene.add(this.fluidPoints);
+                this.matB = new THREE.PointsMaterial({ size: this.params.densitySize, vertexColors: true, map: tex, transparent: true, opacity: this.params.opacityBase, depthWrite: false, blending: THREE.AdditiveBlending });
+                this.fluidPoints = new THREE.Points(geomB, this.matB); this.scene.add(this.fluidPoints);
 
                 this.baseGrid = [];
-                for(let x=0; x<this.gridRes; x++) { 
-                    for(let y=0; y<this.gridRes; y++) { 
-                        for(let z=0; z<this.gridRes; z++) { 
-                            this.baseGrid.push([(x/this.gridRes)*12-6, (y/this.gridRes)*12-6, (z/this.gridRes)*12-6]); 
-                        } 
-                    } 
-                }
+                for(let x=0; x<this.gridRes; x++) { for(let y=0; y<this.gridRes; y++) { for(let z=0; z<this.gridRes; z++) { this.baseGrid.push([(x/this.gridRes)*12-6, (y/this.gridRes)*12-6, (z/this.gridRes)*12-6]); } } }
                 
-                const axesHelper = new THREE.AxesHelper( 6 ); 
-                this.scene.add( axesHelper );
+                const axesHelper = new THREE.AxesHelper( 6 ); this.scene.add( axesHelper );
                 
                 this.bindSliders();
                 this.initialized = true;
@@ -580,21 +621,17 @@
                 window.addEventListener('resize', () => { 
                     if (window.innerWidth <= 0 || window.innerHeight <= 0) return;
                     this.camera.aspect = window.innerWidth / window.innerHeight; 
-                    this.camera.updateProjectionMatrix(); 
-                    this.renderer.setSize(window.innerWidth, window.innerHeight); 
+                    this.camera.updateProjectionMatrix(); this.renderer.setSize(window.innerWidth, window.innerHeight); 
                 });
             },
 
             bindSliders() {
                 const sWobble = document.getElementById('view-wobble');
                 sWobble.addEventListener('input', e => { this.params.wobble = parseFloat(e.target.value); document.getElementById('val-wobble').innerText = this.params.wobble.toFixed(2); });
-                
                 const sDensity = document.getElementById('view-density');
                 sDensity.addEventListener('input', e => { this.params.densitySize = parseFloat(e.target.value); this.matB.size = this.params.densitySize; document.getElementById('val-density').innerText = this.params.densitySize.toFixed(1); });
-                
                 const sOpacity = document.getElementById('view-opacity');
                 sOpacity.addEventListener('input', e => { this.params.opacityBase = parseFloat(e.target.value); this.matB.opacity = this.params.opacityBase; document.getElementById('val-opacity').innerText = this.params.opacityBase.toFixed(2); });
-
                 const sThreshold = document.getElementById('view-threshold');
                 sThreshold.addEventListener('input', e => { this.params.threshold = parseFloat(e.target.value); document.getElementById('val-threshold').innerText = this.params.threshold.toFixed(2); });
             },
@@ -603,8 +640,7 @@
                 let pos = [], col = [];
                 data.forEach(p => { 
                     pos.push(p.x[0], p.x[1], p.x[2]); 
-                    if(p.y===1) col.push(1.0, 0.1, 0.3);
-                    else col.push(0.1, 0.8, 1.0);
+                    if(p.y===1) col.push(1.0, 0.1, 0.3); else col.push(0.1, 0.8, 1.0);
                 });
                 this.dataPoints.geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); 
                 this.dataPoints.geometry.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
@@ -612,16 +648,13 @@
 
             render(nn) {
                 if(!this.initialized) this.init();
-                this.controls.update(); 
-                this.time += 0.04;
+                this.controls.update(); this.time += 0.04;
 
                 let bPos = [], bCol = [];
-                let p_wobble = this.params.wobble;
-                let p_thresh = this.params.threshold;
+                let p_wobble = this.params.wobble; let p_thresh = this.params.threshold;
 
                 for(let i=0; i<this.baseGrid.length; i++) {
-                    let pt = this.baseGrid[i]; 
-                    let pred = App.getNormalizedPrediction(pt); 
+                    let pt = this.baseGrid[i]; let pred = App.getNormalizedPrediction(pt); 
                     
                     let wobbleX = pt[0]; let wobbleY = pt[1]; let wobbleZ = pt[2];
                     if (p_wobble > 0) {
@@ -632,32 +665,22 @@
                     
                     bPos.push(wobbleX, wobbleY, wobbleZ);
                     
-                    // Alpha Logic based on dynamic threshold
-                    let distToBoundary = Math.abs(pred - 0.5) / 0.5; // Normalized 0 to 1
+                    let distToBoundary = Math.abs(pred - 0.5) / 0.5;
                     let isBoundary = Math.abs(pred - 0.5) <= p_thresh;
                     
                     let alpha;
-                    if (isBoundary) {
-                        // Peak brightness inside threshold
-                        alpha = 0.02 + Math.pow(1.0 - (Math.abs(pred - 0.5)/p_thresh), 2) * 0.9;
-                    } else {
-                        // Fast falloff outside threshold
-                        alpha = 0.02; 
-                    }
+                    if (isBoundary) alpha = 0.02 + Math.pow(1.0 - (Math.abs(pred - 0.5)/p_thresh), 2) * 0.9;
+                    else alpha = 0.02; 
                     
                     let r, g, b;
-                    if (pred < 0.5) {
-                        r = (1.0 - distToBoundary) * 0.6; g = 0.1 + (1.0 - distToBoundary) * 0.8; b = 0.4 + (1.0 - distToBoundary) * 0.6;
-                    } else {
-                        r = 0.4 + (1.0 - distToBoundary) * 0.6; g = (1.0 - distToBoundary) * 0.5; b = 0.1 + (1.0 - distToBoundary) * 0.2;
-                    }
+                    if (pred < 0.5) { r = (1.0 - distToBoundary) * 0.6; g = 0.1 + (1.0 - distToBoundary) * 0.8; b = 0.4 + (1.0 - distToBoundary) * 0.6; } 
+                    else { r = 0.4 + (1.0 - distToBoundary) * 0.6; g = (1.0 - distToBoundary) * 0.5; b = 0.1 + (1.0 - distToBoundary) * 0.2; }
                     
                     bCol.push(r * alpha, g * alpha, b * alpha);
                 }
                 
                 this.fluidPoints.geometry.setAttribute('position', new THREE.Float32BufferAttribute(bPos, 3));
                 this.fluidPoints.geometry.setAttribute('color', new THREE.Float32BufferAttribute(bCol, 3));
-                
                 this.renderer.render(this.scene, this.camera);
             }
         };
@@ -668,7 +691,8 @@
         const App = {
             nn: null, data: [], hiddenLayers: [2], lossHistory: [],
             epoch: 0, isPlaying: true, animFrame: null, inputDim: 2, currentDataset: 'xor',
-            activeDrag: null, inspectedNeuron: null,
+            activeDrag: null, inspectedNeuron: null, interactionMode: null,
+            drawRate: 10, drawIntervalId: null, currentMousePos: null,
             
             init() {
                 UI.init(); this.bindUI(); this.bindNetworkInteraction(); this.bindSimInteraction();
@@ -690,10 +714,101 @@
                 document.getElementById('lr-slider').addEventListener('input', (e) => { document.getElementById('lr-val').textContent = Math.pow(10, parseFloat(e.target.value)).toFixed(4); });
 
                 document.getElementById('btn-play').addEventListener('click', () => { this.togglePlay(); });
-                document.getElementById('btn-reset').addEventListener('click', () => this.resetNetwork());
+                document.getElementById('btn-reset').addEventListener('click', () => { this.resetNetwork(); });
 
                 document.getElementById('btn-add-layer').addEventListener('click', () => { if (this.hiddenLayers.length < 5) { this.hiddenLayers.push(4); this.renderLayerUI(); this.resetNetwork(); } });
                 document.getElementById('btn-remove-layer').addEventListener('click', () => { if (this.hiddenLayers.length > 0) { this.hiddenLayers.pop(); this.renderLayerUI(); this.resetNetwork(); } });
+                
+                // Add points UI binding
+                const btnAdd0 = document.getElementById('btn-add-class0');
+                const btnAdd1 = document.getElementById('btn-add-class1');
+                const btnDelete = document.getElementById('btn-delete-point');
+                
+                const updateInteractionMode = (mode) => {
+                    this.interactionMode = mode;
+                    btnAdd0.classList.toggle('ring-2', mode === 'add0');
+                    btnAdd0.classList.toggle('ring-sky-400', mode === 'add0');
+                    btnAdd1.classList.toggle('ring-2', mode === 'add1');
+                    btnAdd1.classList.toggle('ring-rose-400', mode === 'add1');
+                    btnDelete.classList.toggle('ring-2', mode === 'delete');
+                    btnDelete.classList.toggle('ring-yellow-400', mode === 'delete');
+                    
+                    document.body.classList.remove('add-point-mode', 'delete-point-mode');
+                    if (mode === 'add0' || mode === 'add1') document.body.classList.add('add-point-mode');
+                    else if (mode === 'delete') document.body.classList.add('delete-point-mode');
+                };
+
+                btnAdd0.addEventListener('click', () => updateInteractionMode(this.interactionMode === 'add0' ? null : 'add0'));
+                btnAdd1.addEventListener('click', () => updateInteractionMode(this.interactionMode === 'add1' ? null : 'add1'));
+                btnDelete.addEventListener('click', () => updateInteractionMode(this.interactionMode === 'delete' ? null : 'delete'));
+                
+                document.getElementById('btn-clear-all').addEventListener('click', () => {
+                    this.data = []; this.X = []; this.Y = [];
+                    if(this.inputDim === 3 && Engine3D.initialized) Engine3D.updateData(this.data);
+                    this.renderVisualizers(); // Don't reset network, just let it adapt
+                });
+
+                document.getElementById('btn-restore-dataset').addEventListener('click', () => {
+                    updateInteractionMode(null);
+                    this.generateData();
+                    this.resetNetwork();
+                });
+
+                const sDrawRate = document.getElementById('draw-rate-slider');
+                if (sDrawRate) {
+                    sDrawRate.addEventListener('input', e => { 
+                        this.drawRate = parseInt(e.target.value); 
+                        document.getElementById('val-draw-rate').innerText = this.drawRate; 
+                        
+                        // Update interval instantly if currently drawing
+                        if (this.drawIntervalId) {
+                            clearInterval(this.drawIntervalId);
+                            this.drawIntervalId = setInterval(() => {
+                                if (this.currentMousePos) this.handlePointInteraction(this.currentMousePos.x, this.currentMousePos.y);
+                            }, 1000 / this.drawRate);
+                        }
+                    });
+                }
+
+                // CSV Upload Logic
+                document.getElementById('file-csv').addEventListener('change', (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        const text = event.target.result;
+                        const lines = text.split('\n');
+                        let newData = [];
+                        lines.forEach(line => {
+                            if (!line.trim()) return;
+                            const parts = line.trim().split(',').map(p => parseFloat(p));
+                            if (parts.length >= this.inputDim + 1 && !isNaN(parts[0])) {
+                                let x = parts.slice(0, this.inputDim);
+                                let y = parts[this.inputDim] > 0.5 ? 1 : 0;
+                                newData.push({x, y});
+                            }
+                        });
+                        
+                        const status = document.getElementById('csv-status');
+                        if (newData.length > 0) {
+                            this.data = newData;
+                            this.X = this.data.map(d => d.x);
+                            this.Y = this.data.map(d => d.y);
+                            if(this.inputDim === 3 && Engine3D.initialized) Engine3D.updateData(this.data);
+                            this.resetNetwork();
+                            status.innerText = `הקובץ נטען בהצלחה! (${newData.length} רשומות)`;
+                            status.classList.remove('hidden', 'text-rose-400');
+                            status.classList.add('text-sky-300');
+                        } else {
+                            status.innerText = "שגיאה בטעינת הקובץ. ודא שהפורמט תואם למימד הנבחר.";
+                            status.classList.remove('hidden', 'text-sky-300');
+                            status.classList.add('text-rose-400');
+                        }
+                        e.target.value = '';
+                        setTimeout(() => status.classList.add('hidden'), 4000);
+                    };
+                    reader.readAsText(file);
+                });
             },
 
             togglePlay(forcePause = false) {
@@ -705,6 +820,12 @@
 
             switchDimension(dim) {
                 this.inputDim = dim;
+                this.interactionMode = null; 
+                document.body.classList.remove('add-point-mode', 'delete-point-mode');
+                document.getElementById('btn-add-class0').classList.remove('ring-2', 'ring-sky-400');
+                document.getElementById('btn-add-class1').classList.remove('ring-2', 'ring-rose-400');
+                document.getElementById('btn-delete-point').classList.remove('ring-2', 'ring-yellow-400');
+
                 document.getElementById('canvas-1d').classList.toggle('hidden', dim !== 1);
                 document.getElementById('container-2d').classList.toggle('hidden', dim !== 2);
                 document.getElementById('container-3d').classList.toggle('hidden', dim !== 3);
@@ -764,7 +885,7 @@
                 if (this.inspectedNeuron.l < this.nn.numLayers) { 
                     if (this.nn.hAct === MathUtils.relu) return Math.min(1, Math.max(0, a/4));
                     if (this.nn.hAct === MathUtils.tanh) return (a+1)/2;
-                    return a; // Sigmoid is already between 0 and 1
+                    return a; 
                 }
                 return a; 
             },
@@ -780,7 +901,6 @@
                         document.getElementById('epoch-display').textContent = this.epoch.toLocaleString();
                         document.getElementById('loss-display').textContent = loss.toFixed(4);
                         this.lossHistory.push(loss);
-                        // ביטלנו את המגבלה כדי להציג את כל היסטוריית הלמידה מראשיתה
                         this.drawLossGraph();
                     }
                 }
@@ -902,12 +1022,103 @@
                 document.getElementById('matrices-content').innerHTML = html;
             },
 
+            handlePointInteraction(clientX, clientY) {
+                if (!this.interactionMode) return;
+                
+                let w = window.innerWidth; let h = window.innerHeight;
+                
+                if (this.interactionMode === 'add0' || this.interactionMode === 'add1') {
+                    // Add tiny jitter so holding down creates a cluster, not perfectly overlapping points
+                    let jx = (Math.random() - 0.5) * 0.4;
+                    let jy = (Math.random() - 0.5) * 0.4;
+                    
+                    let vx = (clientX / w) * 12 - 6 + jx;
+                    let vy = (1 - clientY / h) * 12 - 6 + jy;
+                    
+                    let pt;
+                    let val = this.interactionMode === 'add1' ? 1 : 0;
+                    if (this.inputDim === 1) pt = {x: [vx], y: val};
+                    else if (this.inputDim === 2) pt = {x: [vx, vy], y: val};
+                    else if (this.inputDim === 3) pt = {x: [vx, vy, 0], y: val}; 
+                    
+                    this.data.push(pt);
+                    this.X.push(pt.x);
+                    this.Y.push(pt.y);
+                    if(this.inputDim === 3 && Engine3D.initialized) Engine3D.updateData(this.data);
+                    this.renderVisualizers();
+                } else if (this.interactionMode === 'delete') {
+                    let clickX = clientX;
+                    let clickY = clientY;
+                    let padY = h * 0.15; let rangeY = h * 0.7;
+                    
+                    let minIdx = -1;
+                    let minDist = Infinity;
+                    
+                    for (let i = 0; i < this.data.length; i++) {
+                        let d = this.data[i];
+                        let px = ((d.x[0] + 6) / 12) * w;
+                        let py;
+                        if (this.inputDim === 1) {
+                            py = h - padY - (d.y * rangeY);
+                        } else {
+                            py = (1 - (d.x[1] + 6) / 12) * h;
+                        }
+                        
+                        let dist = Math.hypot(px - clickX, py - clickY);
+                        if (dist < minDist) {
+                            minDist = dist;
+                            minIdx = i;
+                        }
+                    }
+                    
+                    // Delete if clicked close enough (25px radius acts like an eraser brush)
+                    if (minIdx !== -1 && minDist < 25) {
+                        this.data.splice(minIdx, 1);
+                        this.X.splice(minIdx, 1);
+                        this.Y.splice(minIdx, 1);
+                        if(this.inputDim === 3 && Engine3D.initialized) Engine3D.updateData(this.data);
+                        this.renderVisualizers();
+                    }
+                }
+            },
+
             bindSimInteraction() {
+                const layer0 = document.getElementById('sim-layer');
                 const cont2d = document.getElementById('container-2d');
                 const simTooltip = document.getElementById('sim-tooltip');
                 
+                const startDrawing = (e) => {
+                    if (this.interactionMode !== 'add0' && this.interactionMode !== 'add1' && this.interactionMode !== 'delete') return;
+                    this.currentMousePos = { x: e.clientX, y: e.clientY };
+                    this.handlePointInteraction(e.clientX, e.clientY); 
+                    
+                    if (this.drawIntervalId) clearInterval(this.drawIntervalId);
+                    this.drawIntervalId = setInterval(() => {
+                        if (this.currentMousePos) this.handlePointInteraction(this.currentMousePos.x, this.currentMousePos.y);
+                    }, 1000 / this.drawRate);
+                };
+
+                const updateDrawing = (e) => {
+                    if (this.drawIntervalId) {
+                        this.currentMousePos = { x: e.clientX, y: e.clientY };
+                    }
+                };
+
+                const stopDrawing = () => {
+                    if (this.drawIntervalId) {
+                        clearInterval(this.drawIntervalId);
+                        this.drawIntervalId = null;
+                    }
+                };
+
+                layer0.addEventListener('mousedown', startDrawing);
+                document.addEventListener('mousemove', updateDrawing);
+                document.addEventListener('mouseup', stopDrawing);
+                document.addEventListener('mouseleave', stopDrawing); // Stop if cursor leaves the window
+
+                // Hover value
                 cont2d.addEventListener('mousemove', (e) => {
-                    if (this.inputDim !== 2 || this.activeDrag) return;
+                    if (this.inputDim !== 2 || this.activeDrag || this.interactionMode !== null) return;
                     
                     const rect = cont2d.getBoundingClientRect();
                     let px = e.clientX - rect.left;
@@ -1009,7 +1220,7 @@
                         } else if (node) {
                             tooltip.style.left = e.clientX + 'px';
                             tooltip.style.top = e.clientY + 'px';
-                            valStr = `Bias: ${this.nn.B[node.dataset.l-1][node.dataset.i].toFixed(3)}\nClick to Focus`;
+                            valStr = `Bias: ${this.nn.B[node.dataset.l-1][node.dataset.i].toFixed(3)}\nלחץ כדי להתמקד (Focus)`;
                         }
                         tooltip.innerText = valStr;
                     } else { tooltip.style.display = 'none'; }
@@ -1126,7 +1337,6 @@
                                 if (l < this.nn.numLayers) {
                                     if (this.nn.hAct === MathUtils.relu) norm_a = Math.min(1, Math.max(0, a/4));
                                     else if (this.nn.hAct === MathUtils.tanh) norm_a = (a+1)/2;
-                                    // Sigmoid keeps norm_a = a
                                 }
                                 
                                 let py = res - (norm_a * res);
@@ -1145,7 +1355,6 @@
                                     if (l < this.nn.numLayers) {
                                         if (this.nn.hAct === MathUtils.relu) norm_a = Math.min(1, Math.max(0, a/4));
                                         else if (this.nn.hAct === MathUtils.tanh) norm_a = (a+1)/2;
-                                        // Sigmoid keeps norm_a = a
                                     }
                                     
                                     let rgba = getColor(norm_a);
